@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Holographic Memory Theater</title>
+    <meta name="description" content="An immersive holographic memory theater controlled by hand gestures.">
+    <link rel="stylesheet" href="./style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+
+    <!-- Three.js -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <!-- MediaPipe -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"
+        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"
+        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+    <style>
+        @keyframes popInCompliment {
+            0% { transform: translateX(-50%) scale(0.5); opacity: 0; }
+            70% { transform: translateX(-50%) scale(1.1); opacity: 1; }
+            100% { transform: translateX(-50%) scale(1); opacity: 1; }
+        }
+        @keyframes fadeOutCompliment {
+            0% { transform: translateX(-50%) scale(1); opacity: 1; }
+            100% { transform: translateX(-50%) translateY(-30px) scale(0.9); opacity: 0; }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="bg-overlay"></div>
+    <div id="canvas-container"></div>
+
+    <!-- Fireworks canvas (above 3D, below UI) -->
+    <canvas id="fireworks-canvas"></canvas>
+
+    <!-- I LOVE YOU overlay -->
+    <div id="love-overlay">
+        <span id="love-text">I LOVE YOU<br>SO MUCH</span>
+    </div>
+
+    <!-- Compliment Overlay -->
+    <div id="compliment-overlay" style="display: none; position: absolute; top: 15%; left: 50%; transform: translateX(-50%); z-index: 100; text-align: center; pointer-events: none;">
+        <h2 id="compliment-text" style="font-size: 2.8rem; color: #fff; text-shadow: 0 0 20px #FFD1DC, 0 0 40px #FF69B4, 0 0 60px #FF1493; font-family: 'Outfit', sans-serif; margin: 0; letter-spacing: 2px; white-space: nowrap;"></h2>
+    </div>
+
+    <!-- UI Layer -->
+    <div id="ui-layer">
+        <!-- Header Removed for cleaner UI -->
+
+        <!-- Hidden video for MediaPipe -->
+        <video id="input-video" class="hidden-video" playsinline></video>
+
+        <!-- Holographic Memory Log (Appears when photo is focused) -->
+        <div id="caption-panel" class="glass-panel"
+            style="display: none; position: absolute; left: 8%; top: 50%; transform: translateY(-50%); width: 320px; z-index: 15; border-left: 4px solid var(--hot-pink); animation: fadeInLeft 0.5s ease-out; background: rgba(5, 10, 31, 0.6);">
+            <h4
+                style="color: var(--glow-pink); margin-bottom: 10px; font-weight: 400; letter-spacing: 3px; text-transform: uppercase; font-size: 0.8rem; display: flex; align-items: center; gap: 8px;">
+                <span
+                    style="width: 8px; height: 8px; background: var(--hot-pink); border-radius: 50%; display: inline-block; animation: pulse 2s infinite;"></span>
+                MEMORY LOG
+            </h4>
+            <textarea id="caption-input" placeholder="Enter a memory or note here..."
+                style="width: 100%; height: 180px; background: transparent; border: none; color: #fff; font-family: 'Outfit', sans-serif; resize: none; font-size: 1.1rem; line-height: 1.5; outline: none; text-shadow: 0 0 5px rgba(255,255,255,0.3);"></textarea>
+            <div
+                style="width: 100%; height: 1px; background: linear-gradient(90deg, var(--hot-pink), transparent); margin-top: 5px;">
+            </div>
+        </div>
+
+        <!-- Love Prompt Screen -->
+        <div id="loading-screen" class="glass-panel centered" style="min-width: 360px;">
+            <h2 id="love-question" style="font-size: 2.2rem; color: var(--hot-pink); text-shadow: 0 0 20px var(--glow-pink); margin-bottom: 2rem; letter-spacing: 2px;">DO YOU LOVE ME?</h2>
+            <div style="display: flex; gap: 1.5rem; justify-content: center;">
+                <button id="btn-yes">YES 💕</button>
+                <button id="btn-no">NO 💔</button>
+            </div>
+            <p id="status-text" style="display: none; color: var(--baby-pink); margin-top: 1rem; font-size: 1rem;"></p>
+        </div>
+
+        <!-- Unified Control Panel -->
+        <div id="control-panel" class="glass-panel"
+            style="position: absolute; top: 20px; right: 20px; width: 280px; transition: height 0.4s ease; overflow: hidden; display: none;">
+            <div id="control-panel-header"
+                style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--glass-border); padding-bottom: 0.5rem; margin-bottom: 1rem;">
+                <h3 style="font-size: 1.1rem; color: var(--baby-pink);">✦ Control Center</h3>
+                <button id="minimize-btn" title="Minimize"
+                    style="background: none; border: none; cursor: pointer; color: var(--baby-pink); font-size: 1.5rem; line-height: 1; padding: 0 5px;">−</button>
+            </div>
+
+            <div id="control-panel-content">
+                <!-- Skeleton / Hand Sync -->
+                <div style="margin-bottom: 1rem;">
+                    <p
+                        style="font-size: 0.75rem; text-align: center; margin-bottom: 6px; color: var(--baby-pink); text-transform: uppercase; letter-spacing: 2px;">
+                        Hand Sync</p>
+                    <canvas id="skeleton-canvas" width="200" height="150"
+                        style="width: 100%; border-radius: 8px; background: rgba(5, 10, 31, 0.5);"></canvas>
+                </div>
+
+                <!-- Live Gesture Indicator -->
+                <div style="margin-bottom: 1rem; text-align: center;">
+                    <p style="font-size: 0.75rem; color: var(--baby-pink); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 6px;">Current Gesture</p>
+                    <div id="gesture-label" style="
+                        background: rgba(255,105,180,0.12);
+                        border: 1px solid var(--glass-border);
+                        border-radius: 10px;
+                        padding: 8px 12px;
+                        font-size: 1rem;
+                        color: #fff;
+                        letter-spacing: 1px;
+                        min-height: 2rem;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        transition: all 0.3s ease;
+                        text-shadow: 0 0 8px var(--glow-pink);
+                    ">— None</div>
+                </div>
+
+                <!-- Gesture Guide -->
+                <div style="margin-bottom: 1.5rem;">
+                    <p style="font-size: 0.75rem; color: var(--baby-pink); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 6px;">Gesture Guide</p>
+                    <ul style="list-style: none; font-size: 0.8rem; line-height: 1.8;">
+                        <li><span class="icon">✋</span> Open Palm — Rotate</li>
+                        <li><span class="icon">🤏</span> Pinch — Grab</li>
+                        <li><span class="icon">✌️</span> Peace — Release</li>
+                        <li><span class="icon">👐</span> Two Hands — Zoom</li>
+                        <li><span class="icon">🤏🤏</span> Both Pinch — Magic</li>
+                        <li><span class="icon">✊</span> Fist — Pause</li>
+                        <li><span class="icon">🤟</span> I Love You — Boom 💥</li>
+                        <li><span class="icon">👍</span> Thumbs Up — Spin Fast</li>
+                        <li><span class="icon">👎</span> Thumbs Down — Reverse Spin</li>
+                        <li><span class="icon">👌</span> OK Sign — Turn Green</li>
+                        <li><span class="icon">🤙</span> Call Me — Shake</li>
+                        <li><span class="icon">🖐️</span> Four Fingers — Turn Yellow</li>
+                    </ul>
+                </div>
+
+                <!-- Add Photos -->
+                <div style="text-align: center;">
+                    <input type="file" id="photo-upload" accept="image/*" multiple style="display: none;">
+                    <button id="add-photo-btn" class="glass-panel"
+                        style="width: 100%; padding: 10px; cursor: pointer; color: var(--baby-pink); border: 1px solid var(--baby-pink); background: rgba(255,105,180,0.15); font-weight: 600;">＋
+                        Add Photos</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="./app.js"></script>
+</body>
+
+</html>
