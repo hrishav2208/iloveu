@@ -1,0 +1,4 @@
+# refactor: split HandTracker into modules
+Date: 2026-06-26
+
+Separated landmark detection and gesture classification into distinct modules.
