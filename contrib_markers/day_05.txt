@@ -1,0 +1,4 @@
+# docs: document WebSocket event protocol
+Date: 2026-06-27
+
+Documented all socket.io events, payloads, and expected responses in detail.
