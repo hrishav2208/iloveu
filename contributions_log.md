@@ -106,3 +106,7 @@ This file tracks dummy contributions for activity purposes.
 ### 2026-06-28
 - Fixed gesture detection edge case
 
+
+### 2026-06-29
+- Added logging support
+
