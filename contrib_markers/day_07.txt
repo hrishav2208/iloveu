@@ -1,0 +1,4 @@
+# fix: reduce CPU usage during idle state
+Date: 2026-06-29
+
+Paused MediaPipe inference loop when no hand is detected for 3+ seconds.
