@@ -1,0 +1,4 @@
+# feat: display FPS counter on canvas overlay
+Date: 2026-07-01
+
+Real-time FPS counter rendered in top-right corner of the canvas overlay.
