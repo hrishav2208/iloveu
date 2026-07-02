@@ -1,0 +1,4 @@
+# style: improve mobile responsiveness
+Date: 2026-07-02
+
+Added responsive breakpoints for tablet and mobile canvas scaling.
