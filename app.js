@@ -214,6 +214,11 @@ class PolaroidTextureBuilder {
         this.canvas.width = 512;
         this.canvas.height = 680;
         this.ctx = this.canvas.getContext('2d');
+
+        this.backCanvas = document.createElement('canvas');
+        this.backCanvas.width = 512;
+        this.backCanvas.height = 680;
+        this.backCtx = this.backCanvas.getContext('2d');
     }
 
     createTexture(imgElementOrTexture, caption = '', onLoadCallback = null) {
@@ -327,7 +332,89 @@ class PolaroidTextureBuilder {
 
         return new THREE.CanvasTexture(this.canvas);
     }
+
+    createBackTexture(index, dateStr = '') {
+        const ctx = this.backCtx;
+        const w = this.backCanvas.width;
+        const h = this.backCanvas.height;
+
+        // 1. Cozy warm vintage paper backing
+        ctx.fillStyle = '#f6f2e8'; 
+        ctx.fillRect(0, 0, w, h);
+
+        // Subtle inner border line for depth
+        ctx.strokeStyle = '#efeae0';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(4, 4, w - 8, h - 8);
+
+        // Faint paper texture noise
+        ctx.fillStyle = 'rgba(43, 37, 31, 0.015)';
+        for (let i = 0; i < 500; i += 5) {
+            ctx.fillRect(Math.random() * w, Math.random() * h, 3, 3);
+        }
+
+        // 2. Divider line down center
+        ctx.strokeStyle = 'rgba(43, 37, 31, 0.12)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(w / 2, 60);
+        ctx.lineTo(w / 2, h - 60);
+        ctx.stroke();
+
+        // 3. Address writing lines (right side)
+        ctx.strokeStyle = 'rgba(43, 37, 31, 0.08)';
+        ctx.lineWidth = 1.5;
+        for (let j = 0; j < 3; j++) {
+            ctx.beginPath();
+            ctx.moveTo(w / 2 + 30, h / 2 + j * 45 + 30);
+            ctx.lineTo(w - 30, h / 2 + j * 45 + 30);
+            ctx.stroke();
+        }
+
+        // 4. Vintage Postage Stamp (top right)
+        const stampX = w - 120;
+        const stampY = 50;
+        const stampW = 80;
+        const stampH = 95;
+
+        // Dotted stamp border
+        ctx.strokeStyle = '#c5bea9';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.strokeRect(stampX, stampY, stampW, stampH);
+        ctx.setLineDash([]);
+
+        // Stamp background fill
+        ctx.fillStyle = '#ebdcc0';
+        ctx.fillRect(stampX + 3, stampY + 3, stampW - 6, stampH - 6);
+
+        // Stamp rose icon
+        ctx.font = '36px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🌹', stampX + stampW / 2, stampY + stampH / 2);
+
+        // 5. Handwritten postal note (left side)
+        ctx.font = '30px "Caveat", cursive';
+        ctx.fillStyle = 'rgba(43, 37, 31, 0.7)'; // faded ink
+        ctx.textAlign = 'left';
+
+        const displayDate = dateStr || new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        ctx.fillText(`Date: ${displayDate}`, 40, 95);
+
+        ctx.font = '28px "Caveat", cursive';
+        ctx.fillText('Written inside', 40, 180);
+        ctx.fillText('our quiet box.', 40, 220);
+        ctx.fillText('Forever saved,', 40, 310);
+        ctx.fillText('always & forever.', 40, 350);
+        ctx.fillText('♥', 40, 410);
+
+        const texture = new THREE.CanvasTexture(this.backCanvas);
+        texture.needsUpdate = true;
+        return texture;
+    }
 }
+
 
 /* ═══════════════════════════════════════════════════════════
    MAIN MEMORY THEATER / BOX CLASS
@@ -546,27 +633,46 @@ class MemoryBoxTheater {
         // Create canvas container to build polaroid card image
         const builder = new PolaroidTextureBuilder();
         
-        // Material with standard physical reflection (simulates matte photo card)
-        const mat = new THREE.MeshStandardMaterial({
+        // 1. Front texture material (holds photo)
+        const matFront = new THREE.MeshStandardMaterial({
             roughness: 0.5,
             metalness: 0.05,
-            side: THREE.DoubleSide,
             transparent: true,
             opacity: 0.95
         });
 
-        // Load the image and paint polaroid
+        // 2. Back texture material (holds postcard backing)
+        const matBack = new THREE.MeshStandardMaterial({
+            roughness: 0.6,
+            metalness: 0.02,
+            transparent: true,
+            opacity: 0.95,
+            map: builder.createBackTexture(index)
+        });
+
+        // 3. Side edge material (warm plain paper color #f6f2e8)
+        const matEdge = new THREE.MeshStandardMaterial({
+            color: 0xf6f2e8,
+            roughness: 0.8,
+            metalness: 0.01
+        });
+
+        // Load the image and paint polaroid front
         const img = new Image();
         img.crossOrigin = 'anonymous';
         img.onload = () => {
-            mat.map = builder.createTexture(img, captionText);
-            mat.needsUpdate = true;
+            matFront.map = builder.createTexture(img, captionText);
+            matFront.needsUpdate = true;
         };
         img.src = imgUrl;
 
-        // Polaroid aspect ratio (4.0 x 5.3 approximately)
-        const geo  = new THREE.PlaneGeometry(1.6, 2.12, 1, 1);
-        const mesh = new THREE.Mesh(geo, mat);
+        // Thin Box Geometry: width=1.6, height=2.12, depth=0.02
+        const geo = new THREE.BoxGeometry(1.6, 2.12, 0.02);
+
+        // ThreeJS Box Face Material Array: [+X, -X, +Y, -Y, +Z, -Z]
+        // Front is +Z (matFront), Back is -Z (matBack), others are edges (matEdge)
+        const materials = [matEdge, matEdge, matEdge, matEdge, matFront, matBack];
+        const mesh = new THREE.Mesh(geo, materials);
 
         // Keep photo info stored in user data
         mesh.userData = {
@@ -579,7 +685,8 @@ class MemoryBoxTheater {
             liked:       false,
             baseTiltX:   (Math.random() - 0.5) * 0.15,
             baseTiltY:   (Math.random() - 0.5) * 0.15,
-            floatPhase:  Math.random() * Math.PI * 2
+            floatPhase:  Math.random() * Math.PI * 2,
+            isFlipped:   false // tracking 3D rotation flip state
         };
 
         this.memoryMeshes.push(mesh);
@@ -801,13 +908,15 @@ class MemoryBoxTheater {
             const clickedMesh = intersects[0].object;
             
             if (this.focusedMesh === clickedMesh) {
-                // Double-click/tapping focused card unfocuses it
-                this.focusedMesh = null;
-                this.audio.pluck(293.66, 0.2);
-                showToast('Returned photo to box', 'rose');
+                // Toggle card flip state if they tap the already focused card
+                clickedMesh.userData.isFlipped = !clickedMesh.userData.isFlipped;
+                this.audio.pluck(659.25, 0.25);
+                showToast(clickedMesh.userData.isFlipped ? 'Flipped to back of photo 📝' : 'Flipped to front 📸', 'gold');
             } else {
-                // Focus the card
+                // Focus the card, resetting any flips
+                if (this.focusedMesh) this.focusedMesh.userData.isFlipped = false;
                 this.focusedMesh = clickedMesh;
+                this.focusedMesh.userData.isFlipped = false;
                 this.focusedIndex = this.memoryMeshes.indexOf(clickedMesh);
                 this.audio.pluck(523.25, 0.35);
                 showToast('Selected memory card', 'gold');
@@ -815,6 +924,7 @@ class MemoryBoxTheater {
         } else {
             // Tapping background empty space releases focus
             if (this.focusedMesh) {
+                this.focusedMesh.userData.isFlipped = false;
                 this.focusedMesh = null;
                 this.audio.pluck(293.66, 0.2);
                 showToast('Returned photo to box', 'rose');
@@ -945,6 +1055,9 @@ class MemoryBoxTheater {
 
             const curQ = this.focusedMesh.quaternion.clone();
             this.focusedMesh.lookAt(this.carouselGroup.worldToLocal(this.camera.position.clone()));
+            if (this.focusedMesh.userData.isFlipped) {
+                this.focusedMesh.rotateY(Math.PI);
+            }
             const tgtQ = this.focusedMesh.quaternion.clone();
             this.focusedMesh.quaternion.copy(curQ).slerp(tgtQ, 0.1);
 
@@ -954,6 +1067,11 @@ class MemoryBoxTheater {
 
         // 5. Update caption panel text if focused card changes
         if (this.focusedMesh !== this.lastFocusedMesh) {
+            // Reset flipped state of the previous focused card
+            if (this.lastFocusedMesh) {
+                this.lastFocusedMesh.userData.isFlipped = false;
+            }
+
             const panel = document.getElementById('caption-panel');
             const input = document.getElementById('caption-input');
             if (this.focusedMesh) {
@@ -1501,6 +1619,18 @@ class MemoryBoxTheater {
                 });
             }
 
+            // Flip Card Button click handler
+            const flipPhotoBtn = document.getElementById('flip-photo-btn');
+            if (flipPhotoBtn) {
+                flipPhotoBtn.addEventListener('click', () => {
+                    if (this.focusedMesh) {
+                        this.focusedMesh.userData.isFlipped = !this.focusedMesh.userData.isFlipped;
+                        this.audio.pluck(659.25, 0.25);
+                        showToast(this.focusedMesh.userData.isFlipped ? 'Flipped to back of photo 📝' : 'Flipped to front 📸', 'gold');
+                    }
+                });
+            }
+
             // Save/Share
             if (shareBtn && shareModal && closeShareBtn) {
                 shareBtn.addEventListener('click', async () => {
@@ -1558,6 +1688,14 @@ class MemoryBoxTheater {
             const navLogoutBtn = document.getElementById('nav-logout-btn');
             const navDashboardBtn = document.getElementById('nav-dashboard-btn');
             const userGreeting = document.getElementById('user-greeting');
+
+            // Mobile drawer counterparts
+            const navLoginBtnMob     = document.getElementById('nav-login-btn-mob');
+            const navLogoutBtnMob    = document.getElementById('nav-logout-btn-mob');
+            const navDashboardBtnMob = document.getElementById('nav-dashboard-btn-mob');
+            const userGreetingMob    = document.getElementById('user-greeting-mob');
+            const navHamburger       = document.getElementById('nav-hamburger');
+            const navDrawer          = document.getElementById('nav-drawer');
             
             const dashboardModal = document.getElementById('dashboard-modal');
             const closeDashboardBtn = document.getElementById('close-dashboard-btn');
@@ -1567,6 +1705,23 @@ class MemoryBoxTheater {
             
             let isSignUpMode = false;
             let loggedInUser = null;
+
+            // ── Hamburger toggle ──────────────────────────────────────
+            const closeDrawer = () => {
+                if (navDrawer) navDrawer.classList.remove('open');
+            };
+            if (navHamburger && navDrawer) {
+                navHamburger.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    navDrawer.classList.toggle('open');
+                });
+                // Close drawer when tapping outside
+                document.addEventListener('click', (e) => {
+                    if (!navDrawer.contains(e.target) && e.target !== navHamburger) {
+                        closeDrawer();
+                    }
+                });
+            }
 
             // Toggle Login / Sign Up UI
             if (authToggleLink) {
@@ -1674,24 +1829,66 @@ class MemoryBoxTheater {
                 });
             }
 
-            // Helper to update Auth navigation elements
+            // Helper to update Auth navigation elements (desktop + mobile drawer)
             const updateAuthUI = (username) => {
                 loggedInUser = username;
                 if (username) {
-                    if (navLoginBtn) navLoginBtn.style.display = 'none';
-                    if (navLogoutBtn) navLogoutBtn.style.display = 'inline-block';
+                    // Desktop
+                    if (navLoginBtn)     navLoginBtn.style.display = 'none';
+                    if (navLogoutBtn)    navLogoutBtn.style.display = 'inline-block';
                     if (navDashboardBtn) navDashboardBtn.style.display = 'inline-block';
                     if (userGreeting) {
                         userGreeting.style.display = 'inline';
                         userGreeting.textContent = `Hello, ${username} ✨`;
                     }
+                    // Mobile drawer
+                    if (navLoginBtnMob)     navLoginBtnMob.style.display = 'none';
+                    if (navLogoutBtnMob)    navLogoutBtnMob.style.display = 'flex';
+                    if (navDashboardBtnMob) navDashboardBtnMob.style.display = 'flex';
+                    if (userGreetingMob) {
+                        userGreetingMob.style.display = 'block';
+                        userGreetingMob.textContent = `Hello, ${username} ✨`;
+                    }
                 } else {
-                    if (navLoginBtn) navLoginBtn.style.display = 'inline-block';
-                    if (navLogoutBtn) navLogoutBtn.style.display = 'none';
+                    // Desktop
+                    if (navLoginBtn)     navLoginBtn.style.display = 'inline-block';
+                    if (navLogoutBtn)    navLogoutBtn.style.display = 'none';
                     if (navDashboardBtn) navDashboardBtn.style.display = 'none';
-                    if (userGreeting) userGreeting.style.display = 'none';
+                    if (userGreeting)    userGreeting.style.display = 'none';
+                    // Mobile drawer
+                    if (navLoginBtnMob)     navLoginBtnMob.style.display = 'flex';
+                    if (navLogoutBtnMob)    navLogoutBtnMob.style.display = 'none';
+                    if (navDashboardBtnMob) navDashboardBtnMob.style.display = 'none';
+                    if (userGreetingMob)    userGreetingMob.style.display = 'none';
                 }
             };
+
+            // Wire mobile drawer buttons to same handlers
+            if (navLoginBtnMob) {
+                navLoginBtnMob.addEventListener('click', () => {
+                    closeDrawer();
+                    const authModal = document.getElementById('auth-modal');
+                    if (authModal) authModal.style.display = 'flex';
+                });
+            }
+            if (navLogoutBtnMob) {
+                navLogoutBtnMob.addEventListener('click', async () => {
+                    closeDrawer();
+                    try {
+                        await fetch('/api/auth/logout', { method: 'POST' });
+                        showToast('Logged out successfully', 'rose');
+                        updateAuthUI(null);
+                        if (dashboardModal) dashboardModal.style.display = 'none';
+                    } catch (err) { console.error(err); }
+                });
+            }
+            if (navDashboardBtnMob) {
+                navDashboardBtnMob.addEventListener('click', () => {
+                    closeDrawer();
+                    loadDashboard();
+                    if (dashboardModal) dashboardModal.style.display = 'block';
+                });
+            }
 
             // Check Auth Status on boot
             const checkAuthStatus = async () => {
@@ -1810,8 +2007,9 @@ class MemoryBoxTheater {
                     this.memoryMeshes.forEach(mesh => {
                         this.carouselGroup.remove(mesh);
                         mesh.geometry.dispose();
-                        if (mesh.material.map) mesh.material.map.dispose();
-                        mesh.material.dispose();
+                        // materials is now an array (BoxGeometry uses 6 face materials)
+                        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+                        mats.forEach(m => { if (m.map) m.map.dispose(); m.dispose(); });
                     });
                     this.memoryMeshes = [];
                     this.focusedMesh = this.hoveredMesh = null;
@@ -1844,7 +2042,18 @@ class MemoryBoxTheater {
                         if (btnYes) btnYes.click();
                     }
                     
+                    closeDrawer();
                     showToast('Started a new memory box! 🕯️', 'gold');
+                });
+            }
+
+            // Mobile drawer Create Yours — same logic as desktop button
+            const navCreateNewBtnMob = document.getElementById('nav-create-new-btn-mob');
+            if (navCreateNewBtnMob) {
+                navCreateNewBtnMob.addEventListener('click', () => {
+                    const desktopBtn = document.getElementById('nav-create-new-btn');
+                    if (desktopBtn) desktopBtn.click(); // reuse the exact same handler
+                    closeDrawer();
                 });
             }
         };

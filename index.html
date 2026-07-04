@@ -83,14 +83,25 @@
         <!-- Header Navigation Bar -->
         <header id="nav-header">
             <div class="logo">🌹 Our Memory Box</div>
-            <div class="nav-links">
+            <!-- Desktop nav links (hidden on mobile) -->
+            <div class="nav-links" id="nav-links-desktop">
                 <button id="nav-create-new-btn" style="background:var(--paper);color:var(--text-dark);font-weight:bold;">✍️ Create Yours</button>
                 <button id="nav-dashboard-btn" style="display:none;">📖 Dashboard</button>
                 <button id="nav-login-btn">Log In</button>
                 <span id="user-greeting" style="display:none;font-size:0.8rem;color:var(--text-muted);"></span>
                 <button id="nav-logout-btn" style="display:none;">Log Out</button>
             </div>
+            <!-- Mobile hamburger toggle -->
+            <button id="nav-hamburger" aria-label="Menu">☰</button>
         </header>
+        <!-- Mobile slide-down drawer -->
+        <div id="nav-drawer">
+            <button id="nav-create-new-btn-mob" class="drawer-btn primary-btn">✍️ Create Yours</button>
+            <button id="nav-dashboard-btn-mob" class="drawer-btn" style="display:none;">📖 Dashboard</button>
+            <button id="nav-login-btn-mob" class="drawer-btn">Log In</button>
+            <span id="user-greeting-mob" style="display:none;font-size:0.8rem;color:var(--text-muted);padding:8px 0;"></span>
+            <button id="nav-logout-btn-mob" class="drawer-btn" style="display:none;">Log Out</button>
+        </div>
 
         <!-- Hidden video for MediaPipe -->
         <video id="input-video" class="hidden-video" playsinline></video>
@@ -106,6 +117,7 @@
                 <button class="emoji-btn" data-emoji="💌" title="Letter">💌</button>
                 <button class="emoji-btn" data-emoji="🕯️" title="Candle">🕯️</button>
             </div>
+            <button id="flip-photo-btn" style="width:100%;margin-top:12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:var(--text-light);border-radius:4px;padding:8px 0;font-size:0.75rem;cursor:pointer;transition:all 0.2s;">🔄 Flip Card</button>
         </div>
 
         <!-- ─── INTRO SCREEN ─── -->

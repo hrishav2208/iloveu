@@ -772,7 +772,69 @@ button {
     border-color: var(--rose);
 }
 
+/* Hamburger button — hidden on desktop */
+#nav-hamburger {
+    display: none;
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: var(--gold);
+    font-size: 1.2rem;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s;
+    line-height: 1;
+}
+#nav-hamburger:hover { background: rgba(255,255,255,0.12); }
+
+/* Slide-down mobile drawer — hidden everywhere by default */
+#nav-drawer {
+    display: none;
+    position: fixed;
+    top: 54px;        /* sits just below the nav-header */
+    left: 0; right: 0;
+    z-index: 99;
+    background: rgba(13, 11, 18, 0.96);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    padding: 12px 20px 16px;
+    flex-direction: column;
+    gap: 10px;
+    transform: translateY(-8px);
+    opacity: 0;
+    transition: opacity 0.22s ease, transform 0.22s ease;
+}
+#nav-drawer.open {
+    display: flex;
+    opacity: 1;
+    transform: translateY(0);
+}
+.drawer-btn {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text-main);
+    padding: 11px 16px;
+    font-size: 0.9rem;
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.18s;
+    font-family: 'Outfit', sans-serif;
+}
+.drawer-btn:hover { background: rgba(255,255,255,0.1); }
+.drawer-btn.primary-btn {
+    background: var(--paper);
+    color: var(--text-dark);
+    font-weight: 600;
+}
+.drawer-btn.primary-btn:hover { background: #fff; }
+
 @media (max-width: 768px) {
+    /* Show hamburger, hide desktop links */
+    #nav-hamburger { display: block; }
+    #nav-links-desktop { display: none !important; }
+
     #nav-header {
         top: 10px;
         left: 10px;
@@ -780,10 +842,6 @@ button {
     }
     #nav-header .logo {
         font-size: 0.95rem;
-    }
-    .nav-links button {
-        padding: 4px 8px;
-        font-size: 0.7rem;
     }
     .dashboard-item {
         flex-direction: column;
@@ -795,4 +853,5 @@ button {
         justify-content: flex-end;
     }
 }
+
 
