@@ -117,8 +117,8 @@ export class HandTracker {
             if (results.multiHandLandmarks.length >= 2) {
                 const landmarks0 = results.multiHandLandmarks[0];
                 const landmarks1 = results.multiHandLandmarks[1];
-                const hand1Pos = landmarks0[9];
-                const hand2Pos = landmarks1[9];
+                let hand1Pos = landmarks0[9];
+                let hand2Pos = landmarks1[9];
 
                 // Check if both hands are pinching (thumb-index distance on each)
                 // Relaxed distance so it's easier to trigger simultaneously
@@ -151,6 +151,22 @@ export class HandTracker {
                 }
 
                 // Otherwise standard two-hand zoom
+                const rawHand1Pos = landmarks0[9];
+                const rawHand2Pos = landmarks1[9];
+
+                if (!this.smoothedPos1 || !this.smoothedPos2) {
+                    this.smoothedPos1 = { x: rawHand1Pos.x, y: rawHand1Pos.y, z: rawHand1Pos.z };
+                    this.smoothedPos2 = { x: rawHand2Pos.x, y: rawHand2Pos.y, z: rawHand2Pos.z };
+                } else {
+                    const alpha = 0.3;
+                    this.smoothedPos1.x += (rawHand1Pos.x - this.smoothedPos1.x) * alpha;
+                    this.smoothedPos1.y += (rawHand1Pos.y - this.smoothedPos1.y) * alpha;
+                    this.smoothedPos2.x += (rawHand2Pos.x - this.smoothedPos2.x) * alpha;
+                    this.smoothedPos2.y += (rawHand2Pos.y - this.smoothedPos2.y) * alpha;
+                }
+                hand1Pos = this.smoothedPos1;
+                hand2Pos = this.smoothedPos2;
+
                 const dist = this.getDist(hand1Pos, hand2Pos);
                 let zoomDelta = 0;
                 if (this.lastTwoHandDist !== null) {
@@ -171,18 +187,35 @@ export class HandTracker {
 
             // SINGLE HAND
             this.lastTwoHandDist = null;
+            this.smoothedPos1 = null;
+            this.smoothedPos2 = null;
             const landmarks = results.multiHandLandmarks[0];
             const handedness = results.multiHandedness[0].label;
 
             const gesture = this.detectGesture(landmarks, handedness);
-            const currentPos = landmarks[9];
+            const rawPos = landmarks[9];
+
+            if (!this.smoothedPos) {
+                this.smoothedPos = { x: rawPos.x, y: rawPos.y, z: rawPos.z };
+            } else {
+                const alpha = 0.3; // Smoothing factor to remove jitter
+                this.smoothedPos.x += (rawPos.x - this.smoothedPos.x) * alpha;
+                this.smoothedPos.y += (rawPos.y - this.smoothedPos.y) * alpha;
+                this.smoothedPos.z += (rawPos.z - this.smoothedPos.z) * alpha;
+            }
+            
+            const currentPos = this.smoothedPos;
 
             let deltaX = 0, deltaY = 0;
             if (this.lastHandPos) {
                 deltaX = currentPos.x - this.lastHandPos.x;
                 deltaY = currentPos.y - this.lastHandPos.y;
+                
+                // Deadzone to prevent micro-jitter
+                if (Math.abs(deltaX) < 0.001) deltaX = 0;
+                if (Math.abs(deltaY) < 0.001) deltaY = 0;
             }
-            this.lastHandPos = currentPos;
+            this.lastHandPos = { x: currentPos.x, y: currentPos.y, z: currentPos.z };
 
             if (this.onGesture) {
                 this.onGesture({
@@ -195,6 +228,9 @@ export class HandTracker {
             }
         } else {
             this.lastHandPos = null;
+            this.smoothedPos = null;
+            this.smoothedPos1 = null;
+            this.smoothedPos2 = null;
             this.lastTwoHandDist = null;
             if (this.onGesture) {
                 this.onGesture({ type: 'none', landmarks: null });

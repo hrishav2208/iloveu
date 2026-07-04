@@ -4,34 +4,360 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { HandTracker } from './HandTracker.js';
 
-class MemoryTheater {
+/* ═══════════════════════════════════════════════════════════
+   NOSTALGIC MUSIC BOX ENGINE (Web Audio API)
+   Generates a sweet, cozy music box pluck and random wind-chime chords.
+═══════════════════════════════════════════════════════════ */
+class MusicBoxEngine {
+    constructor() {
+        this.ctx = null;
+        this.masterGain = null;
+        this.enabled = false;
+        this.melodyInterval = null;
+        // Key of G Major pentatonic for sweet, non-dissonant melodies
+        this.scale = [196.00, 220.00, 246.94, 293.66, 329.63, 392.00, 440.00, 493.88, 587.33, 659.25, 783.99];
+    }
+
+    _ensure() {
+        if (this.ctx) return;
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        this.masterGain = this.ctx.createGain();
+        this.masterGain.gain.setValueAtTime(0.4, this.ctx.currentTime);
+        this.masterGain.connect(this.ctx.destination);
+    }
+
+    _resume() {
+        if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+    }
+
+    // Music Box tooth pluck: high pitch, rapid attack, exponential decay, metallic resonance
+    pluck(freq, volume = 0.35, delay = 0) {
+        if (!this.enabled) return;
+        this._ensure(); this._resume();
+
+        const time = this.ctx.currentTime + delay;
+        
+        // Principal note oscillator
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, time);
+
+        // Metallic overtones (2nd and 4th harmonics for high bell sound)
+        const overtone1 = this.ctx.createOscillator();
+        const overtoneGain1 = this.ctx.createGain();
+        overtone1.type = 'sine';
+        overtone1.frequency.setValueAtTime(freq * 2.0, time);
+
+        const overtone2 = this.ctx.createOscillator();
+        const overtoneGain2 = this.ctx.createGain();
+        overtone2.type = 'sine';
+        overtone2.frequency.setValueAtTime(freq * 3.01, time); // slightly detuned for organic sound
+
+        // Envelope
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(volume, time + 0.005);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + 1.8);
+
+        overtoneGain1.gain.setValueAtTime(0, time);
+        overtoneGain1.gain.linearRampToValueAtTime(volume * 0.4, time + 0.003);
+        overtoneGain1.gain.exponentialRampToValueAtTime(0.001, time + 0.6);
+
+        overtoneGain2.gain.setValueAtTime(0, time);
+        overtoneGain2.gain.linearRampToValueAtTime(volume * 0.2, time + 0.002);
+        overtoneGain2.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
+
+        // Connect
+        osc.connect(gain);
+        overtone1.connect(overtoneGain1);
+        overtone2.connect(overtoneGain2);
+
+        gain.connect(this.masterGain);
+        overtoneGain1.connect(this.masterGain);
+        overtoneGain2.connect(this.masterGain);
+
+        osc.start(time);
+        overtone1.start(time);
+        overtone2.start(time);
+
+        osc.stop(time + 2.0);
+        overtone1.stop(time + 2.0);
+        overtone2.stop(time + 2.0);
+    }
+
+    // Play a gentle music box chord arpeggio
+    arpeggio(baseFreq) {
+        if (!this.enabled) return;
+        const root = baseFreq;
+        const third = baseFreq * 1.25;
+        const fifth = baseFreq * 1.5;
+        const octave = baseFreq * 2.0;
+
+        this.pluck(root, 0.25, 0);
+        this.pluck(third, 0.22, 0.08);
+        this.pluck(fifth, 0.20, 0.16);
+        this.pluck(octave, 0.15, 0.24);
+    }
+
+    // Magical chime run for explosion
+    magicFanfare() {
+        if (!this.enabled) return;
+        const run = [392.00, 440.00, 493.88, 587.33, 659.25, 783.99, 880.00, 987.77, 1174.66];
+        run.forEach((freq, idx) => {
+            this.pluck(freq, 0.22, idx * 0.07);
+        });
+    }
+
+    // Camera capture shutter sound (wooden box click + bell chime)
+    shutter() {
+        if (!this.enabled) return;
+        this._ensure(); this._resume();
+        this.pluck(660, 0.2, 0);
+        this.pluck(880, 0.15, 0.04);
+        
+        // Wooden click
+        const buf = this.ctx.createBuffer(1, this.ctx.sampleRate * 0.02, this.ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i * 0.01);
+        const src = this.ctx.createBufferSource();
+        src.buffer = buf;
+        const gain = this.ctx.createGain();
+        gain.gain.value = 0.15;
+        src.connect(gain);
+        gain.connect(this.masterGain);
+        src.start();
+    }
+
+    // Sobbing note (gentle, warm accordion chord sliding down)
+    sob() {
+        this._ensure(); this._resume();
+        const base = 220;
+        [base, base * 1.2, base * 1.5].forEach((f, idx) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(f, this.ctx.currentTime);
+            osc.frequency.linearRampToValueAtTime(f * 0.9, this.ctx.currentTime + 1.5);
+
+            gain.gain.setValueAtTime(0, this.ctx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.15, this.ctx.currentTime + 0.3);
+            gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 1.8);
+
+            osc.connect(gain);
+            gain.connect(this.masterGain);
+            osc.start();
+            osc.stop(this.ctx.currentTime + 2.0);
+        });
+    }
+
+    // Generative wind chime ambient background
+    startMelody() {
+        this._ensure(); this._resume();
+        if (this.melodyInterval) return;
+
+        const playNote = () => {
+            if (!this.enabled) return;
+            const noteIdx = Math.floor(Math.random() * this.scale.length);
+            const freq = this.scale[noteIdx];
+            const volume = 0.12 + Math.random() * 0.12;
+            
+            // Randomly play single note, double note, or small arpeggio
+            const chance = Math.random();
+            if (chance < 0.6) {
+                this.pluck(freq, volume);
+            } else if (chance < 0.85) {
+                this.pluck(freq, volume);
+                const secondNote = this.scale[(noteIdx + 2) % this.scale.length];
+                this.pluck(secondNote, volume * 0.7, 0.15);
+            } else {
+                this.arpeggio(freq * 0.5);
+            }
+
+            // Set next note time randomly between 2 and 5 seconds
+            const nextDelay = 2000 + Math.random() * 3000;
+            this.melodyInterval = setTimeout(playNote, nextDelay);
+        };
+
+        playNote();
+    }
+
+    stopMelody() {
+        if (this.melodyInterval) {
+            clearTimeout(this.melodyInterval);
+            this.melodyInterval = null;
+        }
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SUBTLE TOAST NOTIFICATION (Paper Card)
+═══════════════════════════════════════════════════════════ */
+function showToast(msg, type = 'gold', duration = 2400) {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.textContent = msg;
+    container.appendChild(toast);
+    setTimeout(() => {
+        toast.classList.add('toast-out');
+        toast.addEventListener('animationend', () => toast.remove(), { once: true });
+    }, duration);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   POLAROID DYNAMIC CANVAS TEXTURE CREATOR
+═══════════════════════════════════════════════════════════ */
+class PolaroidTextureBuilder {
+    constructor() {
+        this.canvas = document.createElement('canvas');
+        this.canvas.width = 512;
+        this.canvas.height = 680;
+        this.ctx = this.canvas.getContext('2d');
+    }
+
+    createTexture(imgElementOrTexture, caption = '', onLoadCallback = null) {
+        const build = (image) => {
+            const ctx = this.ctx;
+            const w = this.canvas.width;
+            const h = this.canvas.height;
+
+            // 1. Draw polaroid card background (warm, slightly aged linen paper texture color)
+            ctx.fillStyle = '#fdfcf7';
+            ctx.fillRect(0, 0, w, h);
+
+            // Subtle inner border line for depth
+            ctx.strokeStyle = '#efeae0';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(4, 4, w - 8, h - 8);
+
+            // 2. Draw shadow gradient inside the photo cutout
+            ctx.fillStyle = 'rgba(0,0,0,0.05)';
+            ctx.fillRect(28, 28, w - 56, h - 140);
+
+            // 3. Draw actual photo image inside cutout
+            try {
+                if (image && image.complete !== false) {
+                    // Fit cover style calculation
+                    const targetW = w - 64;
+                    const targetH = h - 150;
+                    const aspectImg = image.width / image.height;
+                    const aspectTarget = targetW / targetH;
+                    
+                    let sx = 0, sy = 0, sw = image.width, sh = image.height;
+                    if (aspectImg > aspectTarget) {
+                        sw = image.height * aspectTarget;
+                        sx = (image.width - sw) / 2;
+                    } else {
+                        sh = image.width / aspectTarget;
+                        sy = (image.height - sh) / 2;
+                    }
+                    
+                    ctx.drawImage(image, sx, sy, sw, sh, 32, 32, targetW, targetH);
+                } else {
+                    // Fallback visual placeholder if image hasn't loaded yet
+                    ctx.fillStyle = '#eae5d8';
+                    ctx.fillRect(32, 32, w - 64, h - 150);
+                    ctx.font = '24px sans-serif';
+                    ctx.fillStyle = '#a69d8d';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('Loading image...', w / 2, h / 2 - 40);
+                }
+            } catch (err) {
+                console.error('Error drawing image to polaroid:', err);
+            }
+
+            // 4. Subtle photo shadow borders (simulate actual print sticker)
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(32, 32, w - 64, h - 150);
+
+            // 5. Draw Handwritten Caption at the bottom vellum area
+            ctx.font = '36px "Caveat", cursive';
+            ctx.fillStyle = '#2b251f'; // Ink charcoal
+            ctx.textAlign = 'center';
+            
+            // Text wrap for long comments
+            const maxTextW = w - 80;
+            const words = caption.split(' ');
+            let line = '';
+            const lines = [];
+            
+            for (let n = 0; n < words.length; n++) {
+                const testLine = line + words[n] + ' ';
+                const metrics = ctx.measureText(testLine);
+                if (metrics.width > maxTextW && n > 0) {
+                    lines.push(line);
+                    line = words[n] + ' ';
+                } else {
+                    line = testLine;
+                }
+            }
+            lines.push(line);
+
+            // Only draw up to 2 lines of caption to avoid spilling out
+            const startY = h - 85;
+            for (let k = 0; k < Math.min(lines.length, 2); k++) {
+                ctx.fillText(lines[k].trim(), w / 2, startY + k * 38);
+            }
+
+            // Create and update ThreeJS texture
+            const texture = new THREE.CanvasTexture(this.canvas);
+            texture.needsUpdate = true;
+            if (onLoadCallback) onLoadCallback(texture);
+            return texture;
+        };
+
+        // If the source image is passed as a string or ThreeJS texture, handle it
+        if (typeof imgElementOrTexture === 'string') {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => build(img);
+            img.src = imgElementOrTexture;
+        } else if (imgElementOrTexture instanceof HTMLImageElement) {
+            if (imgElementOrTexture.complete) {
+                build(imgElementOrTexture);
+            } else {
+                imgElementOrTexture.onload = () => build(imgElementOrTexture);
+            }
+        } else {
+            // Static empty polaroid template
+            build(null);
+        }
+
+        return new THREE.CanvasTexture(this.canvas);
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MAIN MEMORY THEATER / BOX CLASS
+═══════════════════════════════════════════════════════════ */
+class MemoryBoxTheater {
     constructor() {
         this.container = document.getElementById('canvas-container');
         this.scene = new THREE.Scene();
-        this.scene.fog = new THREE.FogExp2(0x050A1F, 0.05); // Adds depth to the scene
-        this.isPaused = false;
+        this.scene.background = new THREE.Color(0x0d0b12);
+        this.scene.fog = new THREE.FogExp2(0x0d0b12, 0.04);
         
-        // Setup Camera
-        this.camera = new THREE.PerspectiveCamera(
-            60, 
-            window.innerWidth / window.innerHeight, 
-            0.1, 
-            1000
-        );
+        this.audio = new MusicBoxEngine();
+        this.textureBuilder = new PolaroidTextureBuilder();
+
+        // Camera
+        this.camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
         this.camera.position.set(0, 0, 8);
 
-        // Setup Renderer
-        this.renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true, powerPreference: "high-performance" });
+        // Renderer
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         this.container.appendChild(this.renderer.domElement);
 
-        // Setup Post-Processing (Bloom for the PRO Neon Look)
+        // Post-processing — Soft glow bloom
         const renderScene = new RenderPass(this.scene, this.camera);
-        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
-        bloomPass.threshold = 0.2;
-        bloomPass.strength = 1.2;
-        bloomPass.radius = 0.5;
+        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.0, 0.3, 0.9);
+        bloomPass.threshold = 0.25;
+        bloomPass.strength  = 0.65;
+        bloomPass.radius    = 0.4;
 
         this.composer = new EffectComposer(this.renderer);
         this.composer.addPass(renderScene);
@@ -40,318 +366,424 @@ class MemoryTheater {
         this.clock = new THREE.Clock();
         this.targetRotationY = 0;
         this.targetRotationX = 0;
+        this.idleTimer = 0;
 
         this.memoryMeshes = [];
-        this.hoveredMesh = null;
-        this.focusedMesh = null;
-        this.magicWandActive = false;
-        this.isExploding = false;
+        this.hoveredMesh  = null;
+        this.focusedMesh  = null;
+        this.focusedIndex = -1;
+        this.isExploding  = false;
         this.meshVelocities = [];
         this.explosionTimer = null;
-        this.hasUserPhotos = false;
+        this.hasUserPhotos  = false;
+        this.lastSmileTime  = 0;
         this.lastFocusedMesh = null;
-        
-        this.lastSmileTime = 0;
+
         this.compliments = [
-            "You have a cute smile! 😊",
-            "Really in love with your smile! 🥰",
-            "Your smile lights up the room! ✨",
-            "Keep smiling, it suits you! 💖",
-            "That smile is everything! 😍"
+            '✨ Your smile is absolutely beautiful...',
+            '🌹 How your smile lights up everything...',
+            '🌻 Such a sweet, happy smile...',
+            '💌 Thinking of you and that pretty smile...',
+            '🕯️ Warmest thoughts whenever you smile...'
         ];
 
-        this.initFireworks();
-
-        this.initParticles();
+        this.initLights();
+        this.initBokehBackground();
         this.initMemories();
-        this.initHandMarker();
-        
-        // Handle window resize
-        window.addEventListener('resize', this.onWindowResize.bind(this));
+        this.initHandCursor();
+        this.initFireworks(); // magical sparkles on love gesture
 
+        window.addEventListener('resize', this.onWindowResize.bind(this));
+        
         // Start render loop
         this.animate();
         
         this.uiSetup();
     }
 
-    initParticles() {
-        this.particleCount = 5000; // Increased for a pro look
-        const geometry = new THREE.BufferGeometry();
-        const positions = new Float32Array(this.particleCount * 3);
-        const colors = new Float32Array(this.particleCount * 3);
-        this.velocities = new Float32Array(this.particleCount * 3);
+    /* ──────────────────────────────────────────
+       COZY AMBIENT LIGHTS (ThreeJS)
+    ────────────────────────────────────────── */
+    initLights() {
+        // Soft warm candlelight ambient
+        const ambientLight = new THREE.AmbientLight(0xfff8e7, 0.7);
+        this.scene.add(ambientLight);
 
-        const colorPink = new THREE.Color('#FFD1DC');
-        const colorBlue = new THREE.Color('#4169E1'); // Brighter royal blue
+        // Directional warm light to give depth shadow to polaroids
+        this.dirLight = new THREE.DirectionalLight(0xffeacc, 0.9);
+        this.dirLight.position.set(5, 5, 4);
+        this.scene.add(this.dirLight);
 
-        for (let i = 0; i < this.particleCount; i++) {
-            // Distribute in a massive cylinder around the user
-            const radius = 5 + Math.random() * 20;
-            const theta = Math.random() * Math.PI * 2;
-            const y = (Math.random() - 0.5) * 40;
+        // Additional gold back-light
+        const pointLight = new THREE.PointLight(0xd4af37, 1.2, 20);
+        pointLight.position.set(0, 0, -2);
+        this.scene.add(pointLight);
+    }
 
-            positions[i * 3] = Math.cos(theta) * radius;
-            positions[i * 3 + 1] = y;
-            positions[i * 3 + 2] = Math.sin(theta) * radius;
+    /* ──────────────────────────────────────────
+       FLOATING BOKEH EMBERS & DUST SYSTEM
+    ────────────────────────────────────────── */
+    initBokehBackground() {
+        this.bokehGroup = new THREE.Group();
+        this.scene.add(this.bokehGroup);
 
-            this.velocities[i * 3] = 0;
-            this.velocities[i * 3 + 1] = 0;
-            this.velocities[i * 3 + 2] = 0;
-
-            const mixedColor = Math.random() > 0.4 ? colorPink : colorBlue;
-            // Introduce some pure white stars
-            if(Math.random() > 0.95) mixedColor.setHex(0xFFFFFF);
+        // Render larger transparent floating soft gold spheres (bokeh embers)
+        const bokehCount = 45;
+        const geom = new THREE.SphereGeometry(0.5, 16, 16);
+        
+        for (let i = 0; i < bokehCount; i++) {
+            const mat = new THREE.MeshBasicMaterial({
+                color: Math.random() > 0.4 ? 0xd4af37 : 0xdca2a8,
+                transparent: true,
+                opacity: 0.05 + Math.random() * 0.15,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+            const mesh = new THREE.Mesh(geom, mat);
             
-            colors[i * 3] = mixedColor.r;
-            colors[i * 3 + 1] = mixedColor.g;
-            colors[i * 3 + 2] = mixedColor.b;
+            // Random positioning in space
+            mesh.position.set(
+                (Math.random() - 0.5) * 30,
+                (Math.random() - 0.5) * 20,
+                (Math.random() - 0.5) * 15 - 5
+            );
+            
+            // Save drift direction
+            mesh.userData = {
+                driftSpeedX: (Math.random() - 0.5) * 0.01,
+                driftSpeedY: (Math.random() - 0.5) * 0.015,
+                pulseSpeed: 0.5 + Math.random() * 1.5,
+                baseScale: 0.4 + Math.random() * 1.6,
+                phase: Math.random() * Math.PI
+            };
+            mesh.scale.setScalar(mesh.userData.baseScale);
+            this.bokehGroup.add(mesh);
         }
 
-        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        // Add soft dust motes
+        const dustCount = 400;
+        const dustGeom = new THREE.BufferGeometry();
+        const dustPositions = new Float32Array(dustCount * 3);
+        for(let i=0; i<dustCount; i++) {
+            dustPositions[i*3] = (Math.random() - 0.5) * 25;
+            dustPositions[i*3+1] = (Math.random() - 0.5) * 20;
+            dustPositions[i*3+2] = (Math.random() - 0.5) * 15;
+        }
+        dustGeom.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3));
+        
+        const cv = document.createElement('canvas');
+        cv.width = cv.height = 16;
+        const cx = cv.getContext('2d');
+        const gr = cx.createRadialGradient(8, 8, 0, 8, 8, 8);
+        gr.addColorStop(0, 'rgba(212,175,55,0.6)');
+        gr.addColorStop(1, 'rgba(212,175,55,0)');
+        cx.fillStyle = gr;
+        cx.fillRect(0,0,16,16);
 
-        const canvas = document.createElement('canvas');
-        canvas.width = 32;
-        canvas.height = 32;
-        const context = canvas.getContext('2d');
-        const gradient = context.createRadialGradient(16, 16, 0, 16, 16, 16);
-        gradient.addColorStop(0, 'rgba(255,255,255,1)');
-        gradient.addColorStop(0.2, 'rgba(255,255,255,0.8)');
-        gradient.addColorStop(1, 'rgba(255,255,255,0)');
-        context.fillStyle = gradient;
-        context.fillRect(0, 0, 32, 32);
-        const texture = new THREE.CanvasTexture(canvas);
+        const dustMat = new THREE.PointsMaterial({
+            size: 0.08,
+            map: new THREE.CanvasTexture(cv),
+            transparent: true,
+            opacity: 0.4,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+        this.dustPoints = new THREE.Points(dustGeom, dustMat);
+        this.scene.add(this.dustPoints);
+    }
 
-        const material = new THREE.PointsMaterial({
-            size: 0.2,
-            vertexColors: true,
-            map: texture,
+    /* ──────────────────────────────────────────
+       INITIALIZE PHOTO ALBUM CAROU/SPHERE
+    ────────────────────────────────────────── */
+    initMemories() {
+        this.carouselGroup = new THREE.Group();
+        this.scene.add(this.carouselGroup);
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const shareId   = urlParams.get('share');
+
+        if (shareId) {
+            this.hasUserPhotos = true;
+            fetch(`/api/share/${shareId}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.target_name) {
+                        this.targetName = data.target_name;
+                        const q = document.getElementById('love-question');
+                        if (q) q.innerText = `Do you love me, ${data.target_name}?`;
+                    }
+                    if (data.images && data.images.length > 0) {
+                        data.images.forEach((url, i) => {
+                            this.addPhotoToGlobe(url, i, `Memory #${i+1}`);
+                        });
+                        this.recalculateGlobe();
+                        this._updatePhotoCounter();
+                    }
+                })
+                .catch(e => console.error('Error loading shared box:', e));
+        } else {
+            // Load beautiful mock images
+            for (let i = 0; i < 20; i++) {
+                const url = `https://picsum.photos/seed/${i + 70}/400/600`;
+                this.addPhotoToGlobe(url, i, `Warm memory ${i + 1}`);
+            }
+            this.recalculateGlobe();
+        }
+    }
+
+    /* ──────────────────────────────────────────
+       CREATE POLAROID PHOTO MESH WITH SHADOW
+    ────────────────────────────────────────── */
+    addPhotoToGlobe(imgUrl, index, captionText = '') {
+        // Create canvas container to build polaroid card image
+        const builder = new PolaroidTextureBuilder();
+        
+        // Material with standard physical reflection (simulates matte photo card)
+        const mat = new THREE.MeshStandardMaterial({
+            roughness: 0.5,
+            metalness: 0.05,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.95
+        });
+
+        // Load the image and paint polaroid
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+            mat.map = builder.createTexture(img, captionText);
+            mat.needsUpdate = true;
+        };
+        img.src = imgUrl;
+
+        // Polaroid aspect ratio (4.0 x 5.3 approximately)
+        const geo  = new THREE.PlaneGeometry(1.6, 2.12, 1, 1);
+        const mesh = new THREE.Mesh(geo, mat);
+
+        // Keep photo info stored in user data
+        mesh.userData = {
+            targetScale: 1.0,
+            origPos:     new THREE.Vector3(),
+            origQuat:    new THREE.Quaternion(),
+            caption:     captionText,
+            imageUrl:    imgUrl,
+            builder:     builder,
+            liked:       false,
+            baseTiltX:   (Math.random() - 0.5) * 0.15,
+            baseTiltY:   (Math.random() - 0.5) * 0.15,
+            floatPhase:  Math.random() * Math.PI * 2
+        };
+
+        this.memoryMeshes.push(mesh);
+        this.carouselGroup.add(mesh);
+        return mesh;
+    }
+
+    // Recalculate photos positions on a wider spherical wall
+    recalculateGlobe() {
+        const n = this.memoryMeshes.length;
+        const radius = Math.max(6.8, 5.0 + n * 0.08);
+
+        for (let i = 0; i < n; i++) {
+            const mesh = this.memoryMeshes[i];
+            const phi = Math.acos(1 - 2 * (i + 0.5) / n);
+            const theta = Math.PI * (1 + Math.sqrt(5)) * (i + 0.5);
+
+            mesh.userData.origPos.set(
+                radius * Math.cos(theta) * Math.sin(phi),
+                radius * Math.cos(phi) * 0.85, // slightly flattened top-bottom
+                radius * Math.sin(theta) * Math.sin(phi)
+            );
+            mesh.position.copy(mesh.userData.origPos);
+            mesh.lookAt(0, 0, 0);
+
+            // Add gentle tilt variation
+            mesh.rotateX(mesh.userData.baseTiltX);
+            mesh.rotateY(mesh.userData.baseTiltY);
+
+            mesh.userData.origQuat.copy(mesh.quaternion);
+        }
+    }
+
+    // Rebuild texture when caption text gets updated
+    updatePolaroidCaption(mesh, text) {
+        if (!mesh) return;
+        mesh.userData.caption = text;
+        
+        // Reload texture with new handwritten string
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+            mesh.material.map = mesh.userData.builder.createTexture(img, text);
+            mesh.material.needsUpdate = true;
+        };
+        img.src = mesh.userData.imageUrl;
+    }
+
+    /* ──────────────────────────────────────────
+       GOLDEN HAND CURSOR POINT (soft spark)
+    ────────────────────────────────────────── */
+    initHandCursor() {
+        const geom = new THREE.SphereGeometry(0.12, 16, 16);
+        const mat = new THREE.MeshBasicMaterial({
+            color: 0xd4af37,
+            transparent: true,
+            opacity: 0.95
+        });
+        this.handMarker = new THREE.Mesh(geom, mat);
+        this.handMarker.visible = false;
+
+        // Warm candlelight glow point
+        const light = new THREE.PointLight(0xffeaad, 3.5, 8);
+        this.handMarker.add(light);
+        this.scene.add(this.handMarker);
+
+        // Hand trail spark coordinates
+        this.trailPoints = [];
+        this.MAX_TRAIL_POINTS = 20;
+
+        const trailGeom = new THREE.BufferGeometry();
+        const trailPositions = new Float32Array(this.MAX_TRAIL_POINTS * 3);
+        trailGeom.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
+        trailGeom.setDrawRange(0, 0);
+
+        const cv = document.createElement('canvas');
+        cv.width = cv.height = 32;
+        const cx = cv.getContext('2d');
+        const gr = cx.createRadialGradient(16, 16, 0, 16, 16, 16);
+        gr.addColorStop(0, 'rgba(212,175,55,0.7)');
+        gr.addColorStop(1, 'rgba(212,175,55,0)');
+        cx.fillStyle = gr;
+        cx.fillRect(0,0,32,32);
+
+        const trailMat = new THREE.PointsMaterial({
+            size: 0.15,
+            map: new THREE.CanvasTexture(cv),
             transparent: true,
             opacity: 0.6,
             blending: THREE.AdditiveBlending,
             depthWrite: false
         });
-
-        this.particles = new THREE.Points(geometry, material);
-        this.scene.add(this.particles);
+        this.trailMesh = new THREE.Points(trailGeom, trailMat);
+        this.scene.add(this.trailMesh);
     }
 
-    initMemories() {
-        this.carouselGroup = new THREE.Group();
-        this.scene.add(this.carouselGroup);
+    _updateTrail(pos) {
+        this.trailPoints.unshift({x: pos.x, y: pos.y, z: pos.z});
+        if (this.trailPoints.length > this.MAX_TRAIL_POINTS) this.trailPoints.pop();
 
-        const textureLoader = new THREE.TextureLoader();
-        textureLoader.setCrossOrigin("anonymous");
-        const numPhotos = 20; 
-
-        for (let i = 0; i < numPhotos; i++) {
-            const texture = textureLoader.load(`https://picsum.photos/seed/${i + 40}/400/600`);
-            this.addPhotoToGlobe(texture, i);
+        const arr = this.trailMesh.geometry.attributes.position.array;
+        for (let i = 0; i < this.trailPoints.length; i++) {
+            arr[i*3]   = this.trailPoints[i].x;
+            arr[i*3+1] = this.trailPoints[i].y;
+            arr[i*3+2] = this.trailPoints[i].z;
         }
-        this.recalculateGlobe();
+        this.trailMesh.geometry.setDrawRange(0, this.trailPoints.length);
+        this.trailMesh.geometry.attributes.position.needsUpdate = true;
     }
 
-    addPhotoToGlobe(texture, index) {
-        const vertexShader = `
-            varying vec2 vUv;
-            void main() {
-                vUv = uv;
-                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-            }
-        `;
-        
-        const fragmentShader = `
-            uniform sampler2D map;
-            uniform float time;
-            uniform vec3 glowColor;
-            uniform float intensity;
-            varying vec2 vUv;
-
-            void main() {
-                float scanline = sin(vUv.y * 50.0 - time * 2.0) * 0.02 * intensity;
-                vec2 distortedUv = vec2(vUv.x + scanline, vUv.y);
-                vec4 texColor = texture2D(map, distortedUv);
-                vec3 finalColor = mix(texColor.rgb, glowColor, 0.15 * intensity);
-                float flicker = sin(time * 15.0) * 0.05 + 0.95;
-                gl_FragColor = vec4(finalColor * flicker, texColor.a * (0.8 + 0.2 * intensity));
-            }
-        `;
-
-        const isPink = index % 2 === 0;
-        const glowColor = isPink ? new THREE.Color(0xFFD1DC) : new THREE.Color(0x4169E1);
-
-        const material = new THREE.ShaderMaterial({
-            uniforms: {
-                map: { value: texture },
-                time: { value: 0 },
-                glowColor: { value: glowColor },
-                intensity: { value: 0.5 }
-            },
-            vertexShader: vertexShader,
-            fragmentShader: fragmentShader,
-            side: THREE.DoubleSide,
-            transparent: true
-        });
-
-        const geometry = new THREE.PlaneGeometry(1.5, 2.25, 32, 32); 
-        const mesh = new THREE.Mesh(geometry, material);
-
-        mesh.userData = {
-            targetScale: 1.0,
-            origPos: new THREE.Vector3(),
-            origQuat: new THREE.Quaternion(),
-            caption: "", // Stores the user's note for this specific photo
-            isWandTarget: Math.random() < 0.5,
-            wandOffset: new THREE.Vector3(
-                (Math.random() - 0.5) * 0.5,
-                (Math.random() - 0.5) * 0.5,
-                (Math.random() - 0.5) * 0.5
-            )
-        };
-
-        this.memoryMeshes.push(mesh);
-        this.carouselGroup.add(mesh);
+    _clearTrail() {
+        this.trailPoints = [];
+        this.trailMesh.geometry.setDrawRange(0, 0);
     }
 
-    recalculateGlobe() {
-        const numPhotos = this.memoryMeshes.length;
-        // Dynamically expand the globe if they add a lot of photos
-        const radius = Math.max(6, 4 + numPhotos * 0.1); 
-
-        for (let i = 0; i < numPhotos; i++) {
-            const mesh = this.memoryMeshes[i];
-            const phi = Math.acos(1 - 2 * (i + 0.5) / numPhotos);
-            const theta = Math.PI * (1 + Math.sqrt(5)) * (i + 0.5);
-
-            mesh.userData.origPos.x = radius * Math.cos(theta) * Math.sin(phi);
-            mesh.userData.origPos.y = radius * Math.cos(phi);
-            mesh.userData.origPos.z = radius * Math.sin(theta) * Math.sin(phi);
-
-            mesh.position.copy(mesh.userData.origPos);
-            mesh.lookAt(0, 0, 0);
-            mesh.userData.origQuat.copy(mesh.quaternion);
-        }
-    }
-
-    initHandMarker() {
-        // More pro-looking hand marker (Crystal/Diamond shape)
-        const geometry = new THREE.OctahedronGeometry(0.3, 0);
-        const material = new THREE.MeshBasicMaterial({ 
-            color: 0xFFFFFF, 
-            wireframe: true,
-            transparent: true,
-            opacity: 0.8
-        });
-        this.handMarker = new THREE.Mesh(geometry, material);
-        this.handMarker.visible = false;
-        
-        this.handMarker2 = new THREE.Mesh(geometry, material.clone());
-        this.handMarker2.visible = false;
-        
-        // Intense point lights to trigger the Bloom effect
-        const light = new THREE.PointLight(0xFFD1DC, 5, 10);
-        this.handMarker.add(light);
-        
-        const light2 = new THREE.PointLight(0x4169E1, 5, 10);
-        this.handMarker2.add(light2);
-        
-        this.scene.add(this.handMarker);
-        this.scene.add(this.handMarker2);
-    }
-
+    /* ──────────────────────────────────────────
+       RESIZE WINDOW
+    ────────────────────────────────────────── */
     onWindowResize() {
         this.camera.aspect = window.innerWidth / window.innerHeight;
         this.camera.updateProjectionMatrix();
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.composer.setSize(window.innerWidth, window.innerHeight);
+        if (this.fwCanvas) {
+            this.fwCanvas.width = window.innerWidth;
+            this.fwCanvas.height = window.innerHeight;
+        }
     }
 
+    /* ══════════════════════════════════════════
+       RENDER TICK
+    ══════════════════════════════════════════ */
     animate() {
         requestAnimationFrame(this.animate.bind(this));
         
         const delta = this.clock.getDelta();
         const elapsedTime = this.clock.getElapsedTime();
 
-        // Animate particles
-        if (this.particles && !this.isPaused) {
-            this.particles.rotation.y = elapsedTime * 0.02;
+        // 1. Move dust motes and bokeh embers
+        if (this.bokehGroup) {
+            this.bokehGroup.children.forEach(mesh => {
+                mesh.position.x += mesh.userData.driftSpeedX;
+                mesh.position.y += mesh.userData.driftSpeedY;
+                
+                // Keep inside boundaries
+                if (Math.abs(mesh.position.x) > 18) mesh.position.x *= -0.9;
+                if (Math.abs(mesh.position.y) > 12) mesh.position.y *= -0.9;
 
-            const positions = this.particles.geometry.attributes.position.array;
-            let needsUpdate = false;
-            for (let i = 0; i < this.particleCount; i++) {
-                if (Math.abs(this.velocities[i*3]) > 0.001) {
-                    positions[i*3] += this.velocities[i*3];
-                    positions[i*3+1] += this.velocities[i*3+1];
-                    positions[i*3+2] += this.velocities[i*3+2];
-                    
-                    this.velocities[i*3] *= 0.95;
-                    this.velocities[i*3+1] *= 0.95;
-                    this.velocities[i*3+2] *= 0.95;
-                    needsUpdate = true;
-                }
-            }
-            if (needsUpdate) {
-                this.particles.geometry.attributes.position.needsUpdate = true;
-            }
+                // Gentle pulsing opacity
+                mesh.material.opacity = 0.05 + Math.sin(elapsedTime * mesh.userData.pulseSpeed + mesh.userData.phase) * 0.08;
+            });
         }
 
-        // Explosion: push photo meshes outward then let them drift
+        if (this.dustPoints) {
+            const pos = this.dustPoints.geometry.attributes.position.array;
+            for (let i = 0; i < pos.length / 3; i++) {
+                pos[i*3+1] -= 0.015; // fall slowly
+                pos[i*3]   += Math.sin(elapsedTime * 0.3 + i) * 0.005; // drift side to side
+                if (pos[i*3+1] < -10) pos[i*3+1] = 10;
+            }
+            this.dustPoints.geometry.attributes.position.needsUpdate = true;
+        }
+
+        // 2. Slow natural floating/rotation on the polaroids group
+        const handActive = this.handMarker && this.handMarker.visible;
+        if (!handActive && !this.focusedMesh && !this.isExploding) {
+            this.idleTimer += delta;
+            if (this.idleTimer > 1.5) {
+                // gentle idle spin
+                this.targetRotationY += 0.0015;
+            }
+        } else {
+            this.idleTimer = 0;
+        }
+
+        // Apply carousel rotations
+        if (this.carouselGroup && !this.focusedMesh && !this.isExploding) {
+            this.carouselGroup.rotation.y += (this.targetRotationY - this.carouselGroup.rotation.y) * 0.06;
+            this.carouselGroup.rotation.x += (this.targetRotationX - this.carouselGroup.rotation.x) * 0.06;
+            
+            // Add tiny organic float amplitude to each polaroid card
+            this.memoryMeshes.forEach(mesh => {
+                mesh.position.y = mesh.userData.origPos.y + Math.sin(elapsedTime * 0.8 + mesh.userData.floatPhase) * 0.08;
+            });
+        }
+
+        // 3. Blast explosion physics on magical gesture trigger
         if (this.isExploding && this.meshVelocities.length) {
             this.memoryMeshes.forEach((mesh, i) => {
-                const v = this.meshVelocities[i];
-                if (v) {
-                    mesh.position.add(v);
-                    v.multiplyScalar(0.97); // drag
-                    mesh.rotation.x += 0.04;
-                    mesh.rotation.y += 0.03;
-                    if (mesh.material.uniforms) mesh.material.uniforms.intensity.value = 1.8;
+                const vel = this.meshVelocities[i];
+                if (vel) {
+                    mesh.position.add(vel);
+                    vel.multiplyScalar(0.965); // drag
+                    mesh.rotation.x += 0.02;
+                    mesh.rotation.y += 0.015;
                 }
             });
         }
 
-        // Smooth carousel rotation on both axes (only if not focused and not exploding)
-        if (this.carouselGroup && !this.focusedMesh && !this.isExploding) {
-            this.carouselGroup.rotation.y += (this.targetRotationY - this.carouselGroup.rotation.y) * 0.1;
-            this.carouselGroup.rotation.x += (this.targetRotationX - this.carouselGroup.rotation.x) * 0.1;
-
-            // Smoothly return globe to normal size if magic wand is released
-            if (!this.magicWandActive) {
-                this.carouselGroup.scale.lerp(new THREE.Vector3(1, 1, 1), 0.05);
-            }
-        }
-
-        // Animate markers rotating themselves
-        this.handMarker.rotation.y += 0.05;
-        this.handMarker.rotation.x += 0.02;
-        this.handMarker2.rotation.y += 0.05;
-        this.handMarker2.rotation.x += 0.02;
-
-        // Set Shader time
-        this.memoryMeshes.forEach(mesh => {
-            if (mesh.material.uniforms) {
-                mesh.material.uniforms.time.value = elapsedTime;
-            }
-        });
-
+        // 4. Polaroid Hover Scale & Focus Lerp
         if (!this.focusedMesh) {
-            // Normal Hover Logic
-            let closestMesh = null;
-            let closestDist = 4.0;
+            let closestMesh = null, closestDist = 3.2;
 
-            if (this.handMarker.visible && !this.magicWandActive) {
-                const handWorldPos = new THREE.Vector3();
-                this.handMarker.getWorldPosition(handWorldPos);
-
+            if (this.handMarker.visible) {
+                const hwp = new THREE.Vector3();
+                this.handMarker.getWorldPosition(hwp);
                 this.memoryMeshes.forEach(mesh => {
-                    const meshWorldPos = new THREE.Vector3();
-                    mesh.getWorldPosition(meshWorldPos);
-
-                    if (meshWorldPos.z > 2) {
-                        const dist = Math.sqrt(
-                            Math.pow(handWorldPos.x - meshWorldPos.x, 2) +
-                            Math.pow(handWorldPos.y - meshWorldPos.y, 2)
-                        );
+                    const mwp = new THREE.Vector3();
+                    mesh.getWorldPosition(mwp);
+                    
+                    if (mwp.z > 1.5) {
+                        const dist = Math.sqrt((hwp.x - mwp.x)**2 + (hwp.y - mwp.y)**2);
                         if (dist < closestDist) {
                             closestDist = dist;
                             closestMesh = mesh;
@@ -359,308 +791,258 @@ class MemoryTheater {
                     }
                 });
             }
+
             this.hoveredMesh = closestMesh;
 
             this.memoryMeshes.forEach(mesh => {
-                if (mesh === this.hoveredMesh) {
-                    mesh.userData.targetScale = 1.3;
-                    mesh.material.uniforms.intensity.value = 1.5;
-                } else {
-                    mesh.userData.targetScale = 1.0;
-                    mesh.material.uniforms.intensity.value = 0.5;
-                }
-                const scaleOffset = (mesh.userData.targetScale - mesh.scale.x) * 0.1;
-                mesh.scale.set(
-                    mesh.scale.x + scaleOffset,
-                    mesh.scale.y + scaleOffset,
-                    mesh.scale.z + scaleOffset
-                );
-                mesh.position.lerp(mesh.userData.origPos, 0.1);
-                mesh.quaternion.slerp(mesh.userData.origQuat, 0.1);
+                const isHovered = (mesh === this.hoveredMesh);
+                mesh.userData.targetScale = isHovered ? 1.25 : 1.0;
+                
+                const s = (mesh.userData.targetScale - mesh.scale.x) * 0.1;
+                mesh.scale.addScalar(s);
+                
+                // Return photo back to placement
+                mesh.position.lerp(mesh.userData.origPos, 0.08);
+                mesh.quaternion.slerp(mesh.userData.origQuat, 0.08);
             });
         } else {
-            // FOCUS MODE
-            // Dim others slightly, return them to normal
+            // Focus Mode: Dim all other cards
             this.memoryMeshes.forEach(mesh => {
                 if (mesh !== this.focusedMesh) {
-                    mesh.userData.targetScale = 1.0;
-                    mesh.material.uniforms.intensity.value = 0.2; // dim others
-                    const scaleOffset = (mesh.userData.targetScale - mesh.scale.x) * 0.1;
-                    mesh.scale.set(mesh.scale.x + scaleOffset, mesh.scale.y + scaleOffset, mesh.scale.z + scaleOffset);
-                    mesh.position.lerp(mesh.userData.origPos, 0.1);
-                    mesh.quaternion.slerp(mesh.userData.origQuat, 0.1);
+                    mesh.userData.targetScale = 0.85;
+                    const s = (mesh.userData.targetScale - mesh.scale.x) * 0.1;
+                    mesh.scale.addScalar(s);
+                    mesh.position.lerp(mesh.userData.origPos, 0.08);
+                    mesh.quaternion.slerp(mesh.userData.origQuat, 0.08);
                 }
             });
 
-            // Bring focused mesh to camera — directly in front
-            const worldTargetPos = this.camera.position.clone().add(new THREE.Vector3(0, 0, -2.5));
-            const localTargetPos = this.carouselGroup.worldToLocal(worldTargetPos);
-            this.focusedMesh.position.lerp(localTargetPos, 0.1);
+            // Bring focused card smoothly in front of the camera
+            const worldTarget = this.camera.position.clone().add(new THREE.Vector3(0, -0.2, -2.5));
+            const localTarget = this.carouselGroup.worldToLocal(worldTarget);
+            this.focusedMesh.position.lerp(localTarget, 0.1);
 
-            // Make it face camera squarely
-            const currentQuat = this.focusedMesh.quaternion.clone();
+            const curQ = this.focusedMesh.quaternion.clone();
             this.focusedMesh.lookAt(this.carouselGroup.worldToLocal(this.camera.position.clone()));
-            const targetQuat = this.focusedMesh.quaternion.clone();
-            this.focusedMesh.quaternion.copy(currentQuat);
-            this.focusedMesh.quaternion.slerp(targetQuat, 0.1);
+            const tgtQ = this.focusedMesh.quaternion.clone();
+            this.focusedMesh.quaternion.copy(curQ).slerp(tgtQ, 0.1);
 
-            // Scale up
-            const scaleOffset = (2.4 - this.focusedMesh.scale.x) * 0.1;
-            this.focusedMesh.scale.set(
-                this.focusedMesh.scale.x + scaleOffset,
-                this.focusedMesh.scale.y + scaleOffset,
-                this.focusedMesh.scale.z + scaleOffset
-            );
-
-            // ZERO intensity = crystal clear, no hologram noise
-            this.focusedMesh.material.uniforms.intensity.value = 0.0; 
+            const sc = (2.2 - this.focusedMesh.scale.x) * 0.1;
+            this.focusedMesh.scale.addScalar(sc);
         }
 
-        // Show / Hide Caption Panel on state change
+        // 5. Update caption panel text if focused card changes
         if (this.focusedMesh !== this.lastFocusedMesh) {
-            const captionPanel = document.getElementById('caption-panel');
-            const captionInput = document.getElementById('caption-input');
-            
+            const panel = document.getElementById('caption-panel');
+            const input = document.getElementById('caption-input');
             if (this.focusedMesh) {
-                // Image just became focused
-                if (captionPanel) captionPanel.style.display = 'block';
-                if (captionInput) {
-                    captionInput.value = this.focusedMesh.userData.caption || "";
-                }
+                if (panel) panel.style.display = 'block';
+                if (input) input.value = this.focusedMesh.userData.caption || '';
             } else {
-                // Image just got released
-                if (captionPanel) captionPanel.style.display = 'none';
+                if (panel) panel.style.display = 'none';
             }
             this.lastFocusedMesh = this.focusedMesh;
         }
 
-        // Use Composer for Bloom instead of standard renderer
         this.composer.render();
     }
 
-    showCompliment() {
-        const overlay = document.getElementById('compliment-overlay');
-        const text = document.getElementById('compliment-text');
-        if (!overlay || !text) return;
-        
-        const randomCompliment = this.compliments[Math.floor(Math.random() * this.compliments.length)];
-        text.innerText = randomCompliment;
-        
-        overlay.style.display = 'block';
-        overlay.style.animation = 'none'; // Reset animation
-        void overlay.offsetWidth; // Trigger reflow
-        overlay.style.animation = 'popInCompliment 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards';
-        
-        setTimeout(() => {
-            overlay.style.animation = 'fadeOutCompliment 0.8s ease forwards';
-            setTimeout(() => {
-                overlay.style.display = 'none';
-            }, 800);
-        }, 3000); // Show for 3 seconds
-    }
-
-    handleGesture(data) {
-        if (!data || data.type === 'none') {
-            this.handMarker.visible = false;
-            this.handMarker2.visible = false;
-            this._updateGestureLabel('—');
-            return;
-        }
-
-        this._updateGestureLabel(data.type);
-        const ltEl = document.getElementById('loading-text');
-        if (ltEl) ltEl.innerText = "Gesture: " + data.type.toUpperCase();
-
-        // Ensure target X is inverted correctly for mirroring the webcam
-        // MediaPipe X is 0 to 1.
-        const mapX = (x) => -(x - 0.5) * 12; // Wider map range for larger scene
-        const mapY = (y) => -(y - 0.5) * 8;
-
-        if (data.type === 'two_hands_zoom') {
-            this.handMarker.visible = true;
-            this.handMarker2.visible = true;
-            this.magicWandActive = false;
-
-            this.handMarker.position.x += (mapX(data.position.x) - this.handMarker.position.x) * 0.2;
-            this.handMarker.position.y += (mapY(data.position.y) - this.handMarker.position.y) * 0.2;
-            this.handMarker2.position.x += (mapX(data.position2.x) - this.handMarker2.position.x) * 0.2;
-            this.handMarker2.position.y += (mapY(data.position2.y) - this.handMarker2.position.y) * 0.2;
-
-            // Smoother, less sensitive zoom (reduced multiplier from 20 to 8)
-            if (data.zoomDelta) {
-                this.camera.position.z -= data.zoomDelta * 8.0;
-                this.camera.position.z = Math.max(3, Math.min(20, this.camera.position.z));
-            }
-            return;
-        }
-
-        // ─── MAGIC WAND: both hands pinching ───────────────────────────────
-        if (data.type === 'magic_wand') {
-            this.magicWandActive = true;
-            this.handMarker.visible = true;
-            this.handMarker2.visible = true;
-
-            this.handMarker.position.x += (mapX(data.position.x) - this.handMarker.position.x) * 0.25;
-            this.handMarker.position.y += (mapY(data.position.y) - this.handMarker.position.y) * 0.25;
-            this.handMarker.position.z = 6;
-
-            this.handMarker2.position.x += (mapX(data.position2.x) - this.handMarker2.position.x) * 0.25;
-            this.handMarker2.position.y += (mapY(data.position2.y) - this.handMarker2.position.y) * 0.25;
-            this.handMarker2.position.z = 6;
-
-            // Calculate distance between hands in mapped space
-            const dx = mapX(data.position.x) - mapX(data.position2.x);
-            const dy = mapY(data.position.y) - mapY(data.position2.y);
-            const dist = Math.sqrt(dx*dx + dy*dy);
-            
-            // Adjust radius of globe by scaling the entire group
-            const targetScale = Math.max(0.3, Math.min(dist * 0.25, 3.0));
-            this.carouselGroup.scale.set(
-                this.carouselGroup.scale.x + (targetScale - this.carouselGroup.scale.x) * 0.1,
-                this.carouselGroup.scale.y + (targetScale - this.carouselGroup.scale.y) * 0.1,
-                this.carouselGroup.scale.z + (targetScale - this.carouselGroup.scale.z) * 0.1
-            );
-            return;
-        }
-
-        // Single hand — reset wand mode
-        this.magicWandActive = false;
-
-        // Single Hand Logic
-        this.handMarker.visible = true;
-        this.handMarker2.visible = false;
-
-        this.handMarker.position.x += (mapX(data.position.x) - this.handMarker.position.x) * 0.2;
-        this.handMarker.position.y += (mapY(data.position.y) - this.handMarker.position.y) * 0.2;
-        this.handMarker.position.z = 6; // Move marker to the front surface of the globe
-
-        const type = data.type;
-
-        // IRON MAN MODE (Interacting with focused image)
-        if (this.focusedMesh) {
-            if (type === 'open_palm' && (data.deltaX || data.deltaY)) {
-                
-                // Throw Away (Dismiss) if swiping very fast
-                if (Math.abs(data.deltaX) > 0.08 || Math.abs(data.deltaY) > 0.08) {
-                    this.focusedMesh = null; // Releases it back to the globe
-                    return;
-                }
-                
-                // Otherwise drag the hologram around in 3D space
-                // Map hand deltas to world space adjustments
-                this.focusedMesh.position.x -= data.deltaX * 10.0;
-                this.focusedMesh.position.y -= data.deltaY * 10.0;
-            }
-
-            if (type === 'peace') {
-                this.focusedMesh = null;
-            }
-            return; // Skip normal globe rotation while focused
-        }
-
-        // Swiping mechanic to rotate the globe
-        if (type === 'open_palm' && (data.deltaX || data.deltaY)) {
-            // Moving hand left (negative deltaX) should rotate globe left (negative Y rotation)
-            this.targetRotationY -= data.deltaX * 5.0; 
-            // Moving hand up (negative deltaY) should rotate globe up (negative X rotation)
-            this.targetRotationX -= data.deltaY * 5.0;
-        }
-
-        if (type === 'fist') {
-            this.isPaused = true;
-            this.handMarker.scale.set(0.5, 0.5, 0.5);
-            this.handMarker.children[0].color.setHex(0xFF0000); 
-        } else if (type === 'ok_sign') {
-            this.isPaused = false;
-            this.handMarker.scale.set(1.5, 1.5, 1.5);
-            this.handMarker.children[0].color.setHex(0x00FF00); // Green
-        } else if (type === 'four_fingers') {
-            this.isPaused = false;
-            this.handMarker.scale.set(1, 1, 1);
-            this.handMarker.children[0].color.setHex(0xFFFF00); // Yellow
-        } else {
-            this.isPaused = false;
-            this.handMarker.scale.set(1, 1, 1);
-            this.handMarker.children[0].color.setHex(0xFFD1DC); 
-        }
-
-        if (type === 'pinch' && this.hoveredMesh && !this.focusedMesh) {
-            this.focusedMesh = this.hoveredMesh;
-        }
-
-        if (type === 'love') {
-            this.triggerExplosion();
-        }
-
-        if (type === 'thumbs_up') {
-            this.targetRotationY += 0.2; // Speed up rotation
-        }
-
-        if (type === 'thumbs_down') {
-            this.targetRotationY -= 0.2; // Reverse/speed up reverse rotation
-        }
-
-        if (type === 'call_me') {
-            // Shake camera slightly
-            this.camera.position.x = (Math.random() - 0.5) * 0.5;
-            this.camera.position.y = (Math.random() - 0.5) * 0.5;
-        } else {
-            // Re-center camera (only affects x/y)
-            this.camera.position.x += (0 - this.camera.position.x) * 0.1;
-            this.camera.position.y += (0 - this.camera.position.y) * 0.1;
-        }
-    }
-
+    /* ──────────────────────────────────────────
+       MAGICAL EXPLOSION BURST
+    ────────────────────────────────────────── */
     triggerExplosion() {
         if (this.isExploding) return;
         this.isExploding = true;
         this.focusedMesh = null;
 
-        // Blast particles
-        for (let i = 0; i < this.particleCount; i++) {
-            this.velocities[i*3]   = (Math.random() - 0.5) * 3.0;
-            this.velocities[i*3+1] = (Math.random() - 0.5) * 3.0;
-            this.velocities[i*3+2] = (Math.random() - 0.5) * 3.0;
-        }
-
-        // Blast every photo outward with random velocity
+        // Accelerate background dust speeds
         this.meshVelocities = this.memoryMeshes.map(() => new THREE.Vector3(
-            (Math.random() - 0.5) * 0.5,
-            (Math.random() - 0.5) * 0.5,
-            (Math.random() - 0.5) * 0.5
+            (Math.random() - 0.5) * 0.45,
+            (Math.random() - 0.5) * 0.45,
+            (Math.random() - 0.5) * 0.45
         ));
 
-        // Show love overlay
         const overlay = document.getElementById('love-overlay');
         if (overlay) overlay.classList.add('visible');
 
-        // Launch fireworks
         this.startFireworks();
+        this.audio.magicFanfare();
 
-        // Shake the upload button
-        const btn = document.getElementById('add-photo-btn');
-        if (btn) {
-            btn.style.transform = 'scale(1.3)';
-            btn.style.boxShadow = '0 0 30px #FF69B4';
-            setTimeout(() => { btn.style.transform = ''; btn.style.boxShadow = ''; }, 600);
-        }
-
-        // Reset after 4 seconds
         clearTimeout(this.explosionTimer);
-        this.explosionTimer = setTimeout(() => this.resetExplosion(), 4000);
+        this.explosionTimer = setTimeout(() => this.resetExplosion(), 5000);
     }
 
     resetExplosion() {
         this.isExploding = false;
         this.meshVelocities = [];
-
-        // Hide love overlay
         const overlay = document.getElementById('love-overlay');
         if (overlay) overlay.classList.remove('visible');
-
         this.stopFireworks();
     }
 
+    /* ──────────────────────────────────────────
+       GESTURES CONTROLLER
+    ────────────────────────────────────────── */
+    handleGesture(data) {
+        if (!data || data.type === 'none') {
+            this.handMarker.visible = false;
+            this._updateGestureLabel('—');
+            this._updateConfidence(0);
+            this._clearTrail();
+            return;
+        }
+
+        this._updateGestureLabel(data.type);
+        this._updateConfidence(90 + Math.random() * 10);
+
+        const mapX = x => -(x - 0.5) * 11;
+        const mapY = y => -(y - 0.5) * 7.5;
+
+        // Two hands interaction: zoom/scale
+        if (data.type === 'two_hands_zoom') {
+            this.handMarker.visible = true;
+            this.handMarker.position.x += (mapX(data.position.x) - this.handMarker.position.x) * 0.5;
+            this.handMarker.position.y += (mapY(data.position.y) - this.handMarker.position.y) * 0.5;
+
+            if (data.zoomDelta) {
+                this.camera.position.z -= data.zoomDelta * 6.0;
+                this.camera.position.z  = Math.max(3, Math.min(18, this.camera.position.z));
+            }
+            return;
+        }
+
+        // Two pinch magical scaling
+        if (data.type === 'magic_wand') {
+            this.handMarker.visible = true;
+            this.handMarker.position.x += (mapX(data.position.x) - this.handMarker.position.x) * 0.5;
+            this.handMarker.position.y += (mapY(data.position.y) - this.handMarker.position.y) * 0.5;
+            
+            const dx = mapX(data.position.x) - mapX(data.position2.x);
+            const dy = mapY(data.position.y) - mapY(data.position2.y);
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            const ts = Math.max(0.4, Math.min(dist * 0.3, 2.5));
+            this.carouselGroup.scale.lerp(new THREE.Vector3(ts, ts, ts), 0.1);
+            return;
+        }
+
+        // Single hand cursor move
+        this.handMarker.visible = true;
+        const tx = mapX(data.position.x);
+        const ty = mapY(data.position.y);
+        this.handMarker.position.x += (tx - this.handMarker.position.x) * 0.4;
+        this.handMarker.position.y += (ty - this.handMarker.position.y) * 0.4;
+        this.handMarker.position.z  = 5;
+
+        this._updateTrail(this.handMarker.position);
+
+        const type = data.type;
+
+        // If card is zoomed-in
+        if (this.focusedMesh) {
+            if (type === 'open_palm' && (data.deltaX || data.deltaY)) {
+                // Swipe away release
+                if (Math.abs(data.deltaX) > 0.085 || Math.abs(data.deltaY) > 0.085) {
+                    this.focusedMesh = null;
+                    showToast('Returned photo to box', 'rose');
+                    this.audio.pluck(293.66, 0.2); // sweet chime down
+                    return;
+                }
+                // Drag slightly
+                this.focusedMesh.position.x -= data.deltaX * 8.0;
+                this.focusedMesh.position.y -= data.deltaY * 8.0;
+            }
+            if (type === 'peace') {
+                this.focusedMesh = null;
+                showToast('Put photo back', 'gold');
+                this.audio.pluck(293.66, 0.2);
+            }
+            if (type === 'thumbs_up' && !this.focusedMesh.userData.liked) {
+                this.focusedMesh.userData.liked = true;
+                this.showLike();
+            }
+            return;
+        }
+
+        // General rotation
+        if (type === 'open_palm' && (data.deltaX || data.deltaY)) {
+            this.targetRotationY -= data.deltaX * 4.5;
+            this.targetRotationX -= data.deltaY * 4.5;
+        }
+
+        // Pinch selection
+        if (type === 'pinch' && this.hoveredMesh && !this.focusedMesh) {
+            this.focusedMesh = this.hoveredMesh;
+            this.focusedIndex = this.memoryMeshes.indexOf(this.hoveredMesh);
+            this.audio.pluck(523.25, 0.35); // clear box click-bell
+            showToast('Selected memory card', 'gold');
+        }
+
+        // Next/Prev navigator
+        if (type === 'point_up' && this.memoryMeshes.length > 0) {
+            this.focusedIndex = (this.focusedIndex + 1) % this.memoryMeshes.length;
+            this.focusedMesh = this.memoryMeshes[this.focusedIndex];
+            this.audio.pluck(587.33, 0.22);
+            showToast('Next photo', 'gold');
+        }
+        if (type === 'point_down' && this.memoryMeshes.length > 0) {
+            this.focusedIndex = (this.focusedIndex - 1 + this.memoryMeshes.length) % this.memoryMeshes.length;
+            this.focusedMesh = this.memoryMeshes[this.focusedIndex];
+            this.audio.pluck(392.00, 0.22);
+            showToast('Previous photo', 'gold');
+        }
+
+        // Magical love fanfare
+        if (type === 'love') {
+            this.triggerExplosion();
+        }
+
+        // Fast rotate on thumbs up
+        if (type === 'thumbs_up') {
+            this.targetRotationY += 0.2;
+            this.audio.pluck(659.25, 0.15);
+        }
+        if (type === 'thumbs_down') {
+            this.targetRotationY -= 0.2;
+        }
+
+        // Shake camera slightly on shaka
+        if (type === 'call_me') {
+            this.camera.position.x = (Math.random() - 0.5) * 0.4;
+            this.camera.position.y = (Math.random() - 0.5) * 0.4;
+        } else {
+            this.camera.position.x += (0 - this.camera.position.x) * 0.1;
+            this.camera.position.y += (0 - this.camera.position.y) * 0.1;
+        }
+    }
+
+    showLike() {
+        const el = document.getElementById('like-burst');
+        if (!el) return;
+        el.classList.remove('show');
+        void el.offsetWidth;
+        el.classList.add('show');
+        showToast('Liked memory ❤️', 'rose');
+        this.audio.pluck(783.99, 0.3); // High heart pluck
+    }
+
+    takeScreenshot() {
+        try {
+            this.renderer.render(this.scene, this.camera);
+            const dataURL = this.renderer.domElement.toDataURL('image/png');
+            const a = document.createElement('a');
+            a.href = dataURL;
+            a.download = `scrapbook_snapshot_${Date.now()}.png`;
+            a.click();
+            showToast('Saved screenshot to device 📸', 'gold');
+            this.audio.shutter();
+        } catch (e) {
+            showToast('Failed to save screenshot', 'rose');
+        }
+    }
+
+    /* ──────────────────────────────────────────
+       SOFT MAGICAL SPARKLES (Replacing harsh fireworks)
+    ────────────────────────────────────────── */
     initFireworks() {
         this.fwCanvas = document.getElementById('fireworks-canvas');
         if (!this.fwCanvas) return;
@@ -669,14 +1051,6 @@ class MemoryTheater {
         this.fwCtx = this.fwCanvas.getContext('2d');
         this.fwParticles = [];
         this.fwRunning = false;
-        this.fwRaf = null;
-
-        window.addEventListener('resize', () => {
-            if (this.fwCanvas) {
-                this.fwCanvas.width = window.innerWidth;
-                this.fwCanvas.height = window.innerHeight;
-            }
-        });
     }
 
     startFireworks() {
@@ -689,7 +1063,6 @@ class MemoryTheater {
 
     stopFireworks() {
         this.fwRunning = false;
-        if (this.fwRaf) cancelAnimationFrame(this.fwRaf);
         if (this.fwCanvas) this.fwCanvas.style.display = 'none';
     }
 
@@ -698,206 +1071,168 @@ class MemoryTheater {
         const ctx = this.fwCtx;
         const W = this.fwCanvas.width, H = this.fwCanvas.height;
 
-        ctx.fillStyle = 'rgba(5,10,31,0.18)';
+        ctx.fillStyle = 'rgba(13, 11, 18, 0.18)';
         ctx.fillRect(0, 0, W, H);
 
-        // Random burst more frequently
-        if (Math.random() < 0.25) {
-            const colors = ['#FFD1DC','#FF69B4','#FFB6C1','#c7a0ff','#4169E1','#ffffff','#ffe4ff'];
+        // Spawn gold and rose dust bursts
+        if (Math.random() < 0.2) {
             const cx = Math.random() * W;
-            const cy = Math.random() * H * 0.65 + 30;
-            const color = colors[Math.floor(Math.random() * colors.length)];
-            const count = 100 + Math.floor(Math.random() * 80);
+            const cy = Math.random() * H * 0.5 + 50;
+            const color = Math.random() > 0.5 ? '#d4af37' : '#dca2a8';
+            const count = 50 + Math.floor(Math.random() * 40);
+            
             for (let i = 0; i < count; i++) {
                 const angle = (Math.PI * 2 * i) / count;
-                const speed = 2 + Math.random() * 8;
+                const speed = 1.5 + Math.random() * 4.5;
                 this.fwParticles.push({
                     x: cx, y: cy,
                     vx: Math.cos(angle) * speed,
                     vy: Math.sin(angle) * speed,
                     life: 1.0,
-                    decay: 0.012 + Math.random() * 0.018,
+                    decay: 0.015 + Math.random() * 0.015,
                     color,
-                    size: 2 + Math.random() * 2.5,
-                    trail: []
+                    size: 1.5 + Math.random() * 2
                 });
             }
         }
 
-        // Update & draw
         this.fwParticles = this.fwParticles.filter(p => p.life > 0);
         for (const p of this.fwParticles) {
-            p.trail.push({ x: p.x, y: p.y });
-            if (p.trail.length > 5) p.trail.shift();
-
-            // Draw trail
-            for (let t = 0; t < p.trail.length - 1; t++) {
-                const alpha = (t / p.trail.length) * p.life * 0.5;
-                ctx.strokeStyle = p.color;
-                ctx.globalAlpha = alpha;
-                ctx.lineWidth = p.size * 0.5;
-                ctx.beginPath();
-                ctx.moveTo(p.trail[t].x, p.trail[t].y);
-                ctx.lineTo(p.trail[t+1].x, p.trail[t+1].y);
-                ctx.stroke();
-            }
-
-            // Draw spark
             ctx.globalAlpha = p.life;
             ctx.fillStyle = p.color;
-            ctx.shadowBlur = 10;
-            ctx.shadowColor = p.color;
             ctx.beginPath();
             ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
             ctx.fill();
-            ctx.shadowBlur = 0;
 
             p.x  += p.vx;
             p.y  += p.vy;
-            p.vy += 0.09; // gravity
-            p.vx *= 0.98;
+            p.vy += 0.04; // low gravity
+            p.vx *= 0.985;
             p.life -= p.decay;
         }
         ctx.globalAlpha = 1;
-
-        this.fwRaf = requestAnimationFrame(() => this._fwLoop());
-    }
-
-    playSobbingNoise() {
-        // Use Web Speech API to make Hrishav sob dramatically
-        const lines = [
-            "Hrishav is crying... please say yes...",
-            "Hrishav sobbing uncontrollably...",
-            "No no no... Hrishav is heartbroken..."
-        ];
-        const line = lines[Math.floor(Math.random() * lines.length)];
-
-        if ('speechSynthesis' in window) {
-            window.speechSynthesis.cancel();
-            const utter = new SpeechSynthesisUtterance(line);
-            utter.rate = 0.75;
-            utter.pitch = 0.6;
-            utter.volume = 1.0;
-            // Try to pick a soft/sad voice
-            const voices = window.speechSynthesis.getVoices();
-            const softVoice = voices.find(v => v.lang.startsWith('en'));
-            if (softVoice) utter.voice = softVoice;
-            window.speechSynthesis.speak(utter);
-        } else {
-            // Fallback: synth sob tone
-            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            const osc = audioCtx.createOscillator();
-            const gainNode = audioCtx.createGain();
-            osc.type = 'triangle';
-            osc.connect(gainNode);
-            gainNode.connect(audioCtx.destination);
-            osc.frequency.setValueAtTime(450, audioCtx.currentTime);
-            osc.frequency.exponentialRampToValueAtTime(150, audioCtx.currentTime + 1.8);
-            gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-            gainNode.gain.linearRampToValueAtTime(0.6, audioCtx.currentTime + 0.2);
-            gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 2.0);
-            osc.start(audioCtx.currentTime);
-            osc.stop(audioCtx.currentTime + 2.0);
+        
+        if (this.fwRunning) {
+            requestAnimationFrame(() => this._fwLoop());
         }
     }
 
+    /* ──────────────────────────────────────────
+       UI LABEL CONVERSIONS
+    ────────────────────────────────────────── */
     _updateGestureLabel(type) {
         const el = document.getElementById('gesture-label');
         if (!el) return;
         const map = {
-            'open_palm': '✋ Open Palm',
-            'pinch':     '🤏 Pinch',
-            'peace':     '✌️ Peace',
-            'fist':      '✊ Fist',
-            'love':      '🤟 I Love You',
-            'thumbs_up': '👍 Thumbs Up',
-            'thumbs_down':'👎 Thumbs Down',
-            'ok_sign':   '👌 OK Sign',
-            'call_me':   '🤙 Call Me',
-            'four_fingers':'🖐️ Four Fingers',
-            'two_hands_zoom':'👐 Two Hands Zoom',
-            'magic_wand':'🤏🤏 Magic Wand',
-            'point_up':  '☝️ Point Up',
-            'point_down':'👇 Point Down',
-            'smile':     '😊 Smile',
-            '—':         '— None'
+            'open_palm':      '✋ Spinning Album',
+            'pinch':          '🤏 Holding Photo',
+            'peace':          '✌️ Releasing',
+            'fist':           '✊ Pause',
+            'love':           '🤟 Magical Burst',
+            'thumbs_up':      '👍 Like Photo',
+            'thumbs_down':    '👎 Fast Rotate Backward',
+            'ok_sign':        '👌 Capture Screen',
+            'call_me':        '🤙 Shaking Screen',
+            'four_fingers':   '🖐️ Gentle Air Float',
+            'two_hands_zoom': '👐 Floating Closer/Away',
+            'magic_wand':     '🪄 Scaling Album',
+            'point_up':       '☝️ Next Polaroid',
+            'point_down':     '👇 Previous Polaroid',
+            '—':              '— Ready'
         };
         el.textContent = map[type] || ('🖐 ' + type);
+        el.classList.toggle('active', type !== '—');
     }
 
-    uiSetup() {
-        const btnYes = document.getElementById('btn-yes');
-        const btnNo  = document.getElementById('btn-no');
-        const statusText = document.getElementById('status-text');
+    _updateConfidence(pct) {
+        const bar = document.getElementById('confidence-bar');
+        if (bar) bar.style.width = pct + '%';
+    }
 
-        // ── NO: sob, grow/shrink loop, then disappear ─────────────────────
-        let noClickCount = 0;
-        const MAX_NO_CLICKS = 9;
+    _updatePhotoCounter() {
+        const el = document.getElementById('photo-count-num');
+        if (el) el.textContent = this.memoryMeshes.length;
+    }
+
+    /* ══════════════════════════════════════════
+       UI PAGE LIFECYCLE CONTROLS
+    ══════════════════════════════════════════ */
+    uiSetup() {
+        const btnYes    = document.getElementById('btn-yes');
+        const btnNo     = document.getElementById('btn-no');
+        const statusText= document.getElementById('status-text');
+
+        // Toggle Technical Drawer
+        const toggleTechBtn = document.getElementById('toggle-tech-btn');
+        const techDrawer = document.getElementById('tech-drawer');
+        if (toggleTechBtn && techDrawer) {
+            toggleTechBtn.addEventListener('click', () => {
+                techDrawer.classList.toggle('open');
+                toggleTechBtn.textContent = techDrawer.classList.contains('open') ? '⚙️ Hide Camera' : '⚙️ Align Camera';
+            });
+        }
+
+        // NO Button sob looping
+        let noCount = 0;
+        const MAX_NO = 9;
 
         const handleNo = () => {
-            if (noClickCount >= MAX_NO_CLICKS) return;
-            noClickCount++;
+            if (noCount >= MAX_NO) return;
+            noCount++;
+            btnYes.disabled = btnNo.disabled = true;
+            this.audio.sob();
 
-            btnYes.disabled = true;
-            btnNo.disabled  = true;
-            this.playSobbingNoise();
+            if (this.targetName && 'speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const utt = new SpeechSynthesisUtterance(`Please, ${this.targetName}!`);
+                utt.rate = 0.8; utt.pitch = 0.7;
+                window.speechSynthesis.speak(utt);
+            }
 
-            // Shake the question heading
+            // Wobble
             const q = document.getElementById('love-question');
             if (q) {
                 q.style.transition = 'transform 0.1s';
-                q.style.transform = 'translateX(-8px) rotate(-2deg)';
-                setTimeout(() => { q.style.transform = 'translateX(8px) rotate(2deg)'; }, 150);
+                q.style.transform = 'translateX(-8px) rotate(-1.5deg)';
+                setTimeout(() => { q.style.transform = 'translateX(8px) rotate(1.5deg)'; }, 150);
                 setTimeout(() => { q.style.transform = 'none'; }, 300);
             }
 
-            // Yes grows, No shrinks each time
-            const shrinkFactor = 1 - noClickCount * 0.09;
-            const growFactor   = 1 + noClickCount * 0.12;
-
-            btnNo.style.transition  = 'transform 0.5s ease, opacity 0.5s ease, font-size 0.5s ease';
-            btnYes.style.transition = 'transform 0.5s ease, font-size 0.5s ease';
-            btnNo.style.transform   = `scale(${Math.max(shrinkFactor, 0.05)})`;
-            btnNo.style.opacity     = `${Math.max(shrinkFactor, 0.05)}`;
-            btnYes.style.transform  = `scale(${Math.min(growFactor, 2.2)})`;
+            const shrink = 1 - noCount * 0.09;
+            const grow   = 1 + noCount * 0.12;
+            btnNo.style.transform = `scale(${Math.max(shrink, 0.05)})`;
+            btnNo.style.opacity = `${Math.max(shrink, 0.05)}`;
+            btnYes.style.transform = `scale(${Math.min(grow, 2.2)})`;
 
             setTimeout(() => {
-                if (noClickCount >= MAX_NO_CLICKS) {
-                    // Final time — remove No button entirely
-                    btnNo.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
-                    btnNo.style.opacity = '0';
-                    btnNo.style.transform = 'scale(0) rotate(180deg)';
-                    setTimeout(() => { btnNo.style.display = 'none'; }, 650);
-
-                    // Make Yes pulse with a big glow
-                    btnYes.style.transition = 'all 0.5s ease';
-                    btnYes.style.transform  = 'scale(2.4)';
-                    btnYes.style.boxShadow  = '0 0 40px #FF69B4, 0 0 80px #FF1493';
+                if (noCount >= MAX_NO) {
+                    btnNo.style.display = 'none';
+                    btnYes.style.transform = 'scale(2.0)';
+                    btnYes.style.boxShadow = '0 10px 40px rgba(220,162,168,0.4)';
                     btnYes.disabled = false;
-
-                    if (q) { q.innerText = '💕 You know the answer...'; }
+                    if (q) q.innerText = '🌻 Take a look inside first...';
                 } else {
-                    btnYes.disabled = false;
-                    btnNo.disabled  = false;
+                    btnYes.disabled = btnNo.disabled = false;
                 }
-            }, 2600);
+            }, 2400);
         };
-
         btnNo.addEventListener('click', handleNo);
 
-        // ── YES: launch the app ────────────────────────────────────────────
+        // YES Button
         const handleYes = async () => {
-            btnYes.disabled = true;
-            btnNo.disabled  = true;
-
+            btnYes.disabled = btnNo.disabled = true;
             const q = document.getElementById('love-question');
-            if (q) { q.innerText = '💕 Launching...'; q.style.fontSize = '1.6rem'; q.style.color = '#fff'; }
+            if (q) q.innerText = '🌹 Opening...';
+            if (statusText) {
+                statusText.style.display = 'block';
+                statusText.innerText = 'Lighting the candles...';
+            }
 
-            const videoElement = document.getElementById('input-video');
+            const videoEl = document.getElementById('input-video');
             const tracker = new HandTracker(
-                videoElement,
+                videoEl,
                 this.handleGesture.bind(this),
-                (ratio) => { // onSmile callback — fully decoupled from hand gestures
+                (ratio) => {
                     const now = Date.now();
                     if (now - this.lastSmileTime > 6000) {
                         this.lastSmileTime = now;
@@ -909,75 +1244,179 @@ class MemoryTheater {
             try {
                 await tracker.start();
 
-                // Fade out the prompt
-                const screen = document.getElementById('loading-screen');
-                screen.style.transition = 'opacity 0.5s';
-                screen.style.opacity = '0';
-                setTimeout(() => {
-                    screen.style.display = 'none';
-                }, 520);
+                // Setup webcam alignment feed
+                const webcamDisplay = document.getElementById('webcam-display');
+                if (webcamDisplay && videoEl) {
+                    webcamDisplay.srcObject = videoEl.srcObject;
+                }
 
-                // Control panel
+                // Smooth fade loading screen
+                const screen = document.getElementById('loading-screen');
+                screen.style.transition = 'opacity 0.8s';
+                screen.style.opacity = '0';
+                setTimeout(() => { screen.style.display = 'none'; }, 820);
+
+                // Show clean memory panel
                 const cp = document.getElementById('control-panel');
                 if (cp) cp.style.display = 'block';
 
-                // Minimize button
-                const guide  = document.getElementById('control-panel');
+                showToast('Welcome to our memory box 🕯️', 'gold', 3000);
+
+                // Minimize controls
                 const minBtn = document.getElementById('minimize-btn');
-                if (guide && minBtn) {
+                if (cp && minBtn) {
                     minBtn.addEventListener('click', () => {
-                        guide.classList.toggle('minimized');
-                        minBtn.textContent = guide.classList.contains('minimized') ? '+' : '−';
+                        cp.classList.toggle('minimized');
+                        minBtn.textContent = cp.classList.contains('minimized') ? '+' : '−';
                     });
                 }
 
-                // Upload logic
+                // Music Box sound toggle
+                const audioBtn = document.getElementById('audio-toggle-btn');
+                if (audioBtn) {
+                    this.audio.enabled = true;
+                    // Start soft chime mel
+                    this.audio.startMelody();
+                    audioBtn.textContent = '🔊 Music Box: On';
+                    audioBtn.classList.add('active');
+                    const indicator = document.getElementById('audio-indicator');
+                    if (indicator) indicator.classList.add('visible');
+
+                    audioBtn.addEventListener('click', () => {
+                        this.audio.enabled = !this.audio.enabled;
+                        if (this.audio.enabled) {
+                            this.audio.startMelody();
+                            audioBtn.textContent = '🔊 Music Box: On';
+                            audioBtn.classList.add('active');
+                            if (indicator) indicator.classList.add('visible');
+                            showToast('Wind chimes & notes active', 'gold');
+                        } else {
+                            this.audio.stopMelody();
+                            audioBtn.textContent = '🔇 Music Box: Off';
+                            audioBtn.classList.remove('active');
+                            if (indicator) indicator.classList.remove('visible');
+                        }
+                    });
+                }
+
+                // Photos add
                 const fileInput = document.getElementById('photo-upload');
                 const uploadBtn = document.getElementById('add-photo-btn');
+                const targetNameInp = document.getElementById('target-name-input');
+                const shareBtn = document.getElementById('share-gallery-btn');
+                const shareModal = document.getElementById('share-modal');
+                const shareLinkInput = document.getElementById('share-link-input');
+                const copyLinkBtn = document.getElementById('copy-link-btn');
+                const closeShareBtn = document.getElementById('close-share-modal-btn');
+
+                this.pendingUploads = [];
+
                 if (fileInput && uploadBtn) {
                     uploadBtn.addEventListener('click', () => fileInput.click());
-                    fileInput.addEventListener('change', (e) => {
+                    fileInput.addEventListener('change', e => {
                         const files = e.target.files;
                         if (!files.length) return;
+
                         if (!this.hasUserPhotos) {
                             this.hasUserPhotos = true;
                             this.memoryMeshes.forEach(mesh => {
                                 this.carouselGroup.remove(mesh);
                                 mesh.geometry.dispose();
-                                if (mesh.material.uniforms?.map?.value) mesh.material.uniforms.map.value.dispose();
+                                if (mesh.material.map) mesh.material.map.dispose();
                                 mesh.material.dispose();
                             });
                             this.memoryMeshes = [];
-                            this.focusedMesh  = null;
-                            this.hoveredMesh  = null;
+                            this.focusedMesh = this.hoveredMesh = null;
                         }
-                        const tl = new THREE.TextureLoader();
+
                         Array.from(files).forEach(file => {
+                            this.pendingUploads.push(file);
                             const reader = new FileReader();
                             reader.onload = ev => {
-                                tl.load(ev.target.result, tex => {
-                                    this.addPhotoToGlobe(tex, this.memoryMeshes.length);
-                                    this.recalculateGlobe();
-                                });
+                                // Draw polaroid and load
+                                const mesh = this.addPhotoToGlobe(ev.target.result, this.memoryMeshes.length, file.name.split('.')[0]);
+                                this.recalculateGlobe();
+                                this._updatePhotoCounter();
                             };
                             reader.readAsDataURL(file);
                         });
+
+                        if (shareBtn) shareBtn.style.display = 'block';
+                        if (targetNameInp) targetNameInp.style.display = 'block';
+                        showToast(`Added ${files.length} photo prints`, 'rose');
                     });
                 }
 
-                // Caption logic
+                // Emoji reaction click
+                document.querySelectorAll('.emoji-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const captionInput = document.getElementById('caption-input');
+                        if (captionInput && this.focusedMesh) {
+                            captionInput.value += btn.dataset.emoji;
+                            this.updatePolaroidCaption(this.focusedMesh, captionInput.value);
+                        }
+                    });
+                });
+
+                // Notepad caption type update
                 const captionInput = document.getElementById('caption-input');
                 if (captionInput) {
                     captionInput.addEventListener('input', e => {
-                        if (this.focusedMesh) this.focusedMesh.userData.caption = e.target.value;
+                        if (this.focusedMesh) {
+                            this.updatePolaroidCaption(this.focusedMesh, e.target.value);
+                        }
                     });
+                }
+
+                // Save/Share
+                if (shareBtn && shareModal && closeShareBtn) {
+                    shareBtn.addEventListener('click', async () => {
+                        if (!this.pendingUploads.length) return;
+                        const origText = shareBtn.textContent;
+                        shareBtn.textContent = '✉️ Mailing letter...';
+                        shareBtn.disabled = true;
+
+                        const fd = new FormData();
+                        this.pendingUploads.forEach(f => fd.append('photos', f));
+                        if (targetNameInp && targetNameInp.value.trim()) {
+                            fd.append('target_name', targetNameInp.value.trim());
+                        }
+
+                        try {
+                            const res = await fetch('/api/upload', { method: 'POST', body: fd });
+                            const data = await res.json();
+                            if (data.share_id) {
+                                const link = `${window.location.origin}/?share=${data.share_id}`;
+                                shareLinkInput.value = link;
+                                shareModal.style.display = 'block';
+                            }
+                        } catch (err) {
+                            console.error(err);
+                            showToast('Failed to create sharing link', 'rose');
+                        } finally {
+                            shareBtn.textContent = origText;
+                            shareBtn.disabled = false;
+                        }
+                    });
+
+                    if (copyLinkBtn) {
+                        copyLinkBtn.addEventListener('click', () => {
+                            navigator.clipboard.writeText(shareLinkInput.value).then(() => {
+                                showToast('Copied link to clipboard', 'gold');
+                                copyLinkBtn.textContent = '✅ Copied!';
+                                setTimeout(() => { copyLinkBtn.textContent = '📋 Copy Share Link'; }, 2000);
+                            });
+                        });
+                    }
+
+                    closeShareBtn.addEventListener('click', () => { shareModal.style.display = 'none'; });
                 }
 
             } catch (err) {
                 console.error(err);
-                if (q) { q.innerText = '❌ Camera denied. Please refresh.'; q.style.color = '#f88'; }
-                btnYes.disabled = false;
-                btnNo.disabled  = false;
+                if (q) q.innerText = '🌹 Camera permission needed.';
+                if (statusText) statusText.innerText = 'Please refresh the page and allow camera access.';
+                btnYes.disabled = btnNo.disabled = false;
             }
         };
 
@@ -985,6 +1424,7 @@ class MemoryTheater {
     }
 }
 
-window.onload = () => {
-    new MemoryTheater();
-};
+/* ═══════════════════════════════════════════════════════════
+   START PROGRAM
+═══════════════════════════════════════════════════════════ */
+window.onload = () => { new MemoryBoxTheater(); };

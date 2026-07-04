@@ -1,0 +1,7 @@
+database.sqlite
+uploads/
+*.log
+.system_generated/
+.gemini/
+__pycache__/
+*.pyc
