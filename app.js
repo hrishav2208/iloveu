@@ -1362,6 +1362,7 @@ class MemoryBoxTheater {
                 }
             );
 
+            // Try starting camera and hand tracker
             try {
                 await tracker.start();
 
@@ -1370,174 +1371,178 @@ class MemoryBoxTheater {
                 if (webcamDisplay && videoEl) {
                     webcamDisplay.srcObject = videoEl.srcObject;
                 }
+                
+                showToast('Welcome to our memory box 🕯️', 'gold', 3000);
+            } catch (err) {
+                console.warn('Camera/hand tracking blocked or unavailable. Touch Mode active 📱', err);
+                showToast('Camera access blocked. Touch Mode active 📱', 'gold', 4000);
+                
+                // Hide camera alignment gear options as it's not active
+                const toggleTechBtn = document.getElementById('toggle-tech-btn');
+                if (toggleTechBtn) toggleTechBtn.style.display = 'none';
+            }
 
-                // Smooth fade loading screen
-                const screen = document.getElementById('loading-screen');
+            // ─── INITIALIZE 3D GRAPHICS & CONTROLS ANYWAY ───
+            
+            // Smooth fade loading screen
+            const screen = document.getElementById('loading-screen');
+            if (screen) {
                 screen.style.transition = 'opacity 0.8s';
                 screen.style.opacity = '0';
                 setTimeout(() => { screen.style.display = 'none'; }, 820);
+            }
 
-                // Show clean memory panel
-                const cp = document.getElementById('control-panel');
-                if (cp) cp.style.display = 'block';
+            // Show clean memory panel
+            const cp = document.getElementById('control-panel');
+            if (cp) cp.style.display = 'block';
 
-                showToast('Welcome to our memory box 🕯️', 'gold', 3000);
-
-                // Minimize controls
-                const minBtn = document.getElementById('minimize-btn');
-                if (cp && minBtn) {
-                    minBtn.addEventListener('click', () => {
-                        cp.classList.toggle('minimized');
-                        minBtn.textContent = cp.classList.contains('minimized') ? '+' : '−';
-                    });
-                }
-
-                // Music Box sound toggle
-                const audioBtn = document.getElementById('audio-toggle-btn');
-                if (audioBtn) {
-                    this.audio.enabled = true;
-                    // Start soft chime mel
-                    this.audio.startMelody();
-                    audioBtn.textContent = '🔊 Music Box: On';
-                    audioBtn.classList.add('active');
-                    const indicator = document.getElementById('audio-indicator');
-                    if (indicator) indicator.classList.add('visible');
-
-                    audioBtn.addEventListener('click', () => {
-                        this.audio.enabled = !this.audio.enabled;
-                        if (this.audio.enabled) {
-                            this.audio.startMelody();
-                            audioBtn.textContent = '🔊 Music Box: On';
-                            audioBtn.classList.add('active');
-                            if (indicator) indicator.classList.add('visible');
-                            showToast('Wind chimes & notes active', 'gold');
-                        } else {
-                            this.audio.stopMelody();
-                            audioBtn.textContent = '🔇 Music Box: Off';
-                            audioBtn.classList.remove('active');
-                            if (indicator) indicator.classList.remove('visible');
-                        }
-                    });
-                }
-
-                // Photos add
-                const fileInput = document.getElementById('photo-upload');
-                const uploadBtn = document.getElementById('add-photo-btn');
-                const targetNameInp = document.getElementById('target-name-input');
-                const shareBtn = document.getElementById('share-gallery-btn');
-                const shareModal = document.getElementById('share-modal');
-                const shareLinkInput = document.getElementById('share-link-input');
-                const copyLinkBtn = document.getElementById('copy-link-btn');
-                const closeShareBtn = document.getElementById('close-share-modal-btn');
-
-                this.pendingUploads = [];
-
-                if (fileInput && uploadBtn) {
-                    uploadBtn.addEventListener('click', () => fileInput.click());
-                    fileInput.addEventListener('change', e => {
-                        const files = e.target.files;
-                        if (!files.length) return;
-
-                        if (!this.hasUserPhotos) {
-                            this.hasUserPhotos = true;
-                            this.memoryMeshes.forEach(mesh => {
-                                this.carouselGroup.remove(mesh);
-                                mesh.geometry.dispose();
-                                if (mesh.material.map) mesh.material.map.dispose();
-                                mesh.material.dispose();
-                            });
-                            this.memoryMeshes = [];
-                            this.focusedMesh = this.hoveredMesh = null;
-                        }
-
-                        Array.from(files).forEach(file => {
-                            this.pendingUploads.push(file);
-                            const reader = new FileReader();
-                            reader.onload = ev => {
-                                // Draw polaroid and load
-                                const mesh = this.addPhotoToGlobe(ev.target.result, this.memoryMeshes.length, file.name.split('.')[0]);
-                                this.recalculateGlobe();
-                                this._updatePhotoCounter();
-                            };
-                            reader.readAsDataURL(file);
-                        });
-
-                        if (shareBtn) shareBtn.style.display = 'block';
-                        if (targetNameInp) targetNameInp.style.display = 'block';
-                        showToast(`Added ${files.length} photo prints`, 'rose');
-                    });
-                }
-
-                // Emoji reaction click
-                document.querySelectorAll('.emoji-btn').forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        const captionInput = document.getElementById('caption-input');
-                        if (captionInput && this.focusedMesh) {
-                            captionInput.value += btn.dataset.emoji;
-                            this.updatePolaroidCaption(this.focusedMesh, captionInput.value);
-                        }
-                    });
+            // Minimize controls
+            const minBtn = document.getElementById('minimize-btn');
+            if (cp && minBtn) {
+                minBtn.addEventListener('click', () => {
+                    cp.classList.toggle('minimized');
+                    minBtn.textContent = cp.classList.contains('minimized') ? '+' : '−';
                 });
+            }
 
-                // Notepad caption type update
-                const captionInput = document.getElementById('caption-input');
-                if (captionInput) {
-                    captionInput.addEventListener('input', e => {
-                        if (this.focusedMesh) {
-                            this.updatePolaroidCaption(this.focusedMesh, e.target.value);
-                        }
-                    });
-                }
+            // Music Box sound toggle
+            const audioBtn = document.getElementById('audio-toggle-btn');
+            if (audioBtn) {
+                this.audio.enabled = true;
+                this.audio.startMelody();
+                audioBtn.textContent = '🔊 Music Box: On';
+                audioBtn.classList.add('active');
+                const indicator = document.getElementById('audio-indicator');
+                if (indicator) indicator.classList.add('visible');
 
-                // Save/Share
-                if (shareBtn && shareModal && closeShareBtn) {
-                    shareBtn.addEventListener('click', async () => {
-                        if (!this.pendingUploads.length) return;
-                        const origText = shareBtn.textContent;
-                        shareBtn.textContent = '✉️ Mailing letter...';
-                        shareBtn.disabled = true;
+                audioBtn.addEventListener('click', () => {
+                    this.audio.enabled = !this.audio.enabled;
+                    if (this.audio.enabled) {
+                        this.audio.startMelody();
+                        audioBtn.textContent = '🔊 Music Box: On';
+                        audioBtn.classList.add('active');
+                        if (indicator) indicator.classList.add('visible');
+                        showToast('Wind chimes & notes active', 'gold');
+                    } else {
+                        this.audio.stopMelody();
+                        audioBtn.textContent = '🔇 Music Box: Off';
+                        audioBtn.classList.remove('active');
+                        if (indicator) indicator.classList.remove('visible');
+                    }
+                });
+            }
 
-                        const fd = new FormData();
-                        this.pendingUploads.forEach(f => fd.append('photos', f));
-                        if (targetNameInp && targetNameInp.value.trim()) {
-                            fd.append('target_name', targetNameInp.value.trim());
-                        }
+            // Photos add
+            const fileInput = document.getElementById('photo-upload');
+            const uploadBtn = document.getElementById('add-photo-btn');
+            const targetNameInp = document.getElementById('target-name-input');
+            const shareBtn = document.getElementById('share-gallery-btn');
+            const shareModal = document.getElementById('share-modal');
+            const shareLinkInput = document.getElementById('share-link-input');
+            const copyLinkBtn = document.getElementById('copy-link-btn');
+            const closeShareBtn = document.getElementById('close-share-modal-btn');
 
-                        try {
-                            const res = await fetch('/api/upload', { method: 'POST', body: fd });
-                            const data = await res.json();
-                            if (data.share_id) {
-                                const link = `${window.location.origin}/?share=${data.share_id}`;
-                                shareLinkInput.value = link;
-                                shareModal.style.display = 'block';
-                            }
-                        } catch (err) {
-                            console.error(err);
-                            showToast('Failed to create sharing link', 'rose');
-                        } finally {
-                            shareBtn.textContent = origText;
-                            shareBtn.disabled = false;
-                        }
-                    });
+            this.pendingUploads = [];
 
-                    if (copyLinkBtn) {
-                        copyLinkBtn.addEventListener('click', () => {
-                            navigator.clipboard.writeText(shareLinkInput.value).then(() => {
-                                showToast('Copied link to clipboard', 'gold');
-                                copyLinkBtn.textContent = '✅ Copied!';
-                                setTimeout(() => { copyLinkBtn.textContent = '📋 Copy Share Link'; }, 2000);
-                            });
+            if (fileInput && uploadBtn) {
+                uploadBtn.addEventListener('click', () => fileInput.click());
+                fileInput.addEventListener('change', e => {
+                    const files = e.target.files;
+                    if (!files.length) return;
+
+                    if (!this.hasUserPhotos) {
+                        this.hasUserPhotos = true;
+                        this.memoryMeshes.forEach(mesh => {
+                            this.carouselGroup.remove(mesh);
+                            mesh.geometry.dispose();
+                            if (mesh.material.map) mesh.material.map.dispose();
+                            mesh.material.dispose();
                         });
+                        this.memoryMeshes = [];
+                        this.focusedMesh = this.hoveredMesh = null;
                     }
 
-                    closeShareBtn.addEventListener('click', () => { shareModal.style.display = 'none'; });
+                    Array.from(files).forEach(file => {
+                        this.pendingUploads.push(file);
+                        const reader = new FileReader();
+                        reader.onload = ev => {
+                            // Draw polaroid and load
+                            this.addPhotoToGlobe(ev.target.result, this.memoryMeshes.length, file.name.split('.')[0]);
+                            this.recalculateGlobe();
+                            this._updatePhotoCounter();
+                        };
+                        reader.readAsDataURL(file);
+                    });
+
+                    if (shareBtn) shareBtn.style.display = 'block';
+                    if (targetNameInp) targetNameInp.style.display = 'block';
+                    showToast(`Added ${files.length} photo prints`, 'rose');
+                });
+            }
+
+            // Emoji reaction click
+            document.querySelectorAll('.emoji-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const captionInput = document.getElementById('caption-input');
+                    if (captionInput && this.focusedMesh) {
+                        captionInput.value += btn.dataset.emoji;
+                        this.updatePolaroidCaption(this.focusedMesh, captionInput.value);
+                    }
+                });
+            });
+
+            // Notepad caption type update
+            const captionInput = document.getElementById('caption-input');
+            if (captionInput) {
+                captionInput.addEventListener('input', e => {
+                    if (this.focusedMesh) {
+                        this.updatePolaroidCaption(this.focusedMesh, e.target.value);
+                    }
+                });
+            }
+
+            // Save/Share
+            if (shareBtn && shareModal && closeShareBtn) {
+                shareBtn.addEventListener('click', async () => {
+                    if (!this.pendingUploads.length) return;
+                    const origText = shareBtn.textContent;
+                    shareBtn.textContent = '✉️ Mailing letter...';
+                    shareBtn.disabled = true;
+
+                    const fd = new FormData();
+                    this.pendingUploads.forEach(f => fd.append('photos', f));
+                    if (targetNameInp && targetNameInp.value.trim()) {
+                        fd.append('target_name', targetNameInp.value.trim());
+                    }
+
+                    try {
+                        const res = await fetch('/api/upload', { method: 'POST', body: fd });
+                        const data = await res.json();
+                        if (data.share_id) {
+                            const link = `${window.location.origin}/?share=${data.share_id}`;
+                            shareLinkInput.value = link;
+                            shareModal.style.display = 'block';
+                        }
+                    } catch (err) {
+                        console.error(err);
+                        showToast('Failed to create sharing link', 'rose');
+                    } finally {
+                        shareBtn.textContent = origText;
+                        shareBtn.disabled = false;
+                    }
+                });
+
+                if (copyLinkBtn) {
+                    copyLinkBtn.addEventListener('click', () => {
+                        navigator.clipboard.writeText(shareLinkInput.value).then(() => {
+                            showToast('Copied link to clipboard', 'gold');
+                            copyLinkBtn.textContent = '✅ Copied!';
+                            setTimeout(() => { copyLinkBtn.textContent = '📋 Copy Share Link'; }, 2000);
+                        });
+                    });
                 }
 
-            } catch (err) {
-                console.error(err);
-                if (q) q.innerText = '🌹 Camera permission needed.';
-                if (statusText) statusText.innerText = 'Please refresh the page and allow camera access.';
-                btnYes.disabled = btnNo.disabled = false;
+                closeShareBtn.addEventListener('click', () => { shareModal.style.display = 'none'; });
             }
         };
 
