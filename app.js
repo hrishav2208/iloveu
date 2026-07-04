@@ -1544,6 +1544,259 @@ class MemoryBoxTheater {
 
                 closeShareBtn.addEventListener('click', () => { shareModal.style.display = 'none'; });
             }
+
+            // ─── AUTHENTICATION STATE & LOGIC ───
+            const authScreen = document.getElementById('auth-screen');
+            const authForm = document.getElementById('auth-form');
+            const authTitle = document.getElementById('auth-title');
+            const authSub = document.getElementById('auth-sub');
+            const authToggleLink = document.getElementById('auth-toggle-link');
+            const authToggleText = document.getElementById('auth-toggle-text');
+            const authSubmitBtn = document.getElementById('auth-submit-btn');
+            const closeAuthBtn = document.getElementById('close-auth-btn');
+            const navLoginBtn = document.getElementById('nav-login-btn');
+            const navLogoutBtn = document.getElementById('nav-logout-btn');
+            const navDashboardBtn = document.getElementById('nav-dashboard-btn');
+            const userGreeting = document.getElementById('user-greeting');
+            
+            const dashboardModal = document.getElementById('dashboard-modal');
+            const closeDashboardBtn = document.getElementById('close-dashboard-btn');
+            const dashboardCreateBtn = document.getElementById('dashboard-create-btn');
+            const dashboardList = document.getElementById('dashboard-list');
+            const dashboardEmptyState = document.getElementById('dashboard-empty-state');
+            
+            let isSignUpMode = false;
+            let loggedInUser = null;
+
+            // Toggle Login / Sign Up UI
+            if (authToggleLink) {
+                authToggleLink.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    isSignUpMode = !isSignUpMode;
+                    if (isSignUpMode) {
+                        authTitle.textContent = 'Sign Up';
+                        authSub.textContent = 'Create a new account to build memory boxes';
+                        authSubmitBtn.textContent = 'Register & Sign In';
+                        authToggleText.textContent = 'Already have an account?';
+                        authToggleLink.textContent = 'Log In';
+                    } else {
+                        authTitle.textContent = 'Log In';
+                        authSub.textContent = 'Access your letters and dashboard';
+                        authSubmitBtn.textContent = 'Log In';
+                        authToggleText.textContent = "Don't have an account?";
+                        authToggleLink.textContent = 'Sign Up';
+                    }
+                });
+            }
+
+            // Open Auth screen
+            if (navLoginBtn) {
+                navLoginBtn.addEventListener('click', () => {
+                    authScreen.style.display = 'block';
+                    authForm.reset();
+                });
+            }
+
+            if (closeAuthBtn) {
+                closeAuthBtn.addEventListener('click', () => {
+                    authScreen.style.display = 'none';
+                });
+            }
+
+            // Auth Form Submit
+            if (authForm) {
+                authForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const username = document.getElementById('auth-username').value;
+                    const password = document.getElementById('auth-password').value;
+                    
+                    const endpoint = isSignUpMode ? '/api/auth/signup' : '/api/auth/login';
+                    try {
+                        const res = await fetch(endpoint, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ username, password })
+                        });
+                        const data = await res.json();
+                        
+                        if (data.error) {
+                            showToast(data.error, 'rose');
+                        } else {
+                            showToast(isSignUpMode ? 'Welcome, signed up! 🕯️' : 'Welcome back! ❤️', 'gold');
+                            authScreen.style.display = 'none';
+                            updateAuthUI(data.username);
+                            // Automatically load dashboard
+                            loadDashboard();
+                            dashboardModal.style.display = 'block';
+                        }
+                    } catch (err) {
+                        console.error(err);
+                        showToast('Authentication failed', 'rose');
+                    }
+                });
+            }
+
+            // Logout
+            if (navLogoutBtn) {
+                navLogoutBtn.addEventListener('click', async () => {
+                    try {
+                        await fetch('/api/auth/logout', { method: 'POST' });
+                        showToast('Logged out successfully', 'rose');
+                        updateAuthUI(null);
+                        dashboardModal.style.display = 'none';
+                    } catch (err) {
+                        console.error(err);
+                    }
+                });
+            }
+
+            // Open Dashboard
+            if (navDashboardBtn) {
+                navDashboardBtn.addEventListener('click', () => {
+                    loadDashboard();
+                    dashboardModal.style.display = 'block';
+                });
+            }
+
+            if (closeDashboardBtn) {
+                closeDashboardBtn.addEventListener('click', () => {
+                    dashboardModal.style.display = 'none';
+                });
+            }
+
+            // Create New Box from Dashboard
+            if (dashboardCreateBtn) {
+                dashboardCreateBtn.addEventListener('click', () => {
+                    dashboardModal.style.display = 'none';
+                    if (btnYes.disabled === false) {
+                        btnYes.click();
+                    }
+                });
+            }
+
+            // Helper to update Auth navigation elements
+            const updateAuthUI = (username) => {
+                loggedInUser = username;
+                if (username) {
+                    if (navLoginBtn) navLoginBtn.style.display = 'none';
+                    if (navLogoutBtn) navLogoutBtn.style.display = 'inline-block';
+                    if (navDashboardBtn) navDashboardBtn.style.display = 'inline-block';
+                    if (userGreeting) {
+                        userGreeting.style.display = 'inline';
+                        userGreeting.textContent = `Hello, ${username} ✨`;
+                    }
+                } else {
+                    if (navLoginBtn) navLoginBtn.style.display = 'inline-block';
+                    if (navLogoutBtn) navLogoutBtn.style.display = 'none';
+                    if (navDashboardBtn) navDashboardBtn.style.display = 'none';
+                    if (userGreeting) userGreeting.style.display = 'none';
+                }
+            };
+
+            // Check Auth Status on boot
+            const checkAuthStatus = async () => {
+                try {
+                    const res = await fetch('/api/auth/status');
+                    const data = await res.json();
+                    if (data.logged_in) {
+                        updateAuthUI(data.username);
+                    }
+                } catch (err) {
+                    console.error('Failed to fetch auth status', err);
+                }
+            };
+            checkAuthStatus();
+
+            // Load & Render Dashboard Items
+            const loadDashboard = async () => {
+                try {
+                    const res = await fetch('/api/dashboard');
+                    const data = await res.json();
+                    
+                    if (!dashboardList) return;
+                    dashboardList.innerHTML = '';
+                    
+                    if (!data.shares || data.shares.length === 0) {
+                        if (dashboardEmptyState) dashboardEmptyState.style.display = 'block';
+                        return;
+                    }
+                    
+                    if (dashboardEmptyState) dashboardEmptyState.style.display = 'none';
+                    data.shares.forEach(share => {
+                        const row = document.createElement('div');
+                        row.className = 'dashboard-item';
+                        
+                        const info = document.createElement('div');
+                        info.className = 'dashboard-item-info';
+                        
+                        const title = document.createElement('div');
+                        title.className = 'dashboard-item-title';
+                        title.textContent = share.target_name ? `For: ${share.target_name}` : 'Anonymous Memory Box';
+                        
+                        const meta = document.createElement('div');
+                        meta.className = 'dashboard-item-meta';
+                        meta.textContent = `🔗 ID: ${share.id} | 📷 ${share.photo_count} photos`;
+                        
+                        info.appendChild(title);
+                        info.appendChild(meta);
+                        
+                        const actions = document.createElement('div');
+                        actions.className = 'dashboard-item-actions';
+                        
+                        const openBtn = document.createElement('button');
+                        openBtn.className = 'btn-open';
+                        openBtn.textContent = '👁️ Open';
+                        openBtn.onclick = () => {
+                            window.location.search = `?share=${share.id}`;
+                        };
+                        
+                        const copyBtn = document.createElement('button');
+                        copyBtn.className = 'btn-copy';
+                        copyBtn.textContent = '📋 Copy';
+                        copyBtn.onclick = () => {
+                            const link = `${window.location.origin}/?share=${share.id}`;
+                            navigator.clipboard.writeText(link).then(() => {
+                                showToast('Copied link!', 'gold');
+                                copyBtn.textContent = '✅ Copied!';
+                                setTimeout(() => { copyBtn.textContent = '📋 Copy'; }, 2000);
+                            });
+                        };
+                        
+                        const deleteBtn = document.createElement('button');
+                        deleteBtn.className = 'btn-delete';
+                        deleteBtn.textContent = '🗑️ Delete';
+                        deleteBtn.onclick = async () => {
+                            if (confirm('Are you sure you want to delete this memory box? This cannot be undone.')) {
+                                try {
+                                    const delRes = await fetch(`/api/share/${share.id}`, { method: 'DELETE' });
+                                    const delData = await delRes.json();
+                                    if (delData.error) {
+                                        showToast(delData.error, 'rose');
+                                    } else {
+                                        showToast('Memory box deleted', 'rose');
+                                        loadDashboard(); // reload
+                                    }
+                                } catch (err) {
+                                    console.error(err);
+                                    showToast('Failed to delete', 'rose');
+                                }
+                            }
+                        };
+                        
+                        actions.appendChild(openBtn);
+                        actions.appendChild(copyBtn);
+                        actions.appendChild(deleteBtn);
+                        
+                        row.appendChild(info);
+                        row.appendChild(actions);
+                        
+                        dashboardList.appendChild(row);
+                    });
+                } catch (err) {
+                    console.error(err);
+                    showToast('Failed to load dashboard', 'rose');
+                }
+            };
         };
 
         btnYes.addEventListener('click', handleYes);

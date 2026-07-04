@@ -578,7 +578,7 @@ button {
 ══════════════════════════════════════════ */
 #audio-indicator {
     position: fixed;
-    top: 2rem; left: 2rem;
+    bottom: 2rem; left: 2rem;
     display: none;
     align-items: center;
     gap: 8px;
@@ -660,7 +660,7 @@ button {
         transform: none;
     }
     #audio-indicator {
-        top: 1rem; left: 1rem;
+        bottom: 1rem; left: 1rem;
     }
     #love-text {
         font-size: 2.2rem;
@@ -672,3 +672,127 @@ button {
         padding: 4px;
     }
 }
+
+/* ══════════════════════════════════════════
+   NAVIGATION BAR
+══════════════════════════════════════════ */
+#nav-header {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    right: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 100;
+}
+#nav-header .logo {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--gold);
+    text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+    letter-spacing: 1px;
+}
+.nav-links {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+.nav-links button {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text-light);
+    padding: 6px 12px;
+    font-size: 0.78rem;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.nav-links button:hover {
+    background: var(--paper);
+    color: var(--text-dark);
+}
+
+/* ══════════════════════════════════════════
+   DASHBOARD ITEMS
+══════════════════════════════════════════ */
+.dashboard-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    padding: 12px 16px;
+    border-radius: 6px;
+    transition: background 0.2s;
+}
+.dashboard-item:hover {
+    background: rgba(255,255,255,0.06);
+}
+.dashboard-item-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.dashboard-item-title {
+    font-weight: bold;
+    color: var(--gold);
+    font-size: 0.9rem;
+}
+.dashboard-item-meta {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+.dashboard-item-actions {
+    display: flex;
+    gap: 8px;
+}
+.dashboard-item-actions button {
+    padding: 5px 10px;
+    font-size: 0.72rem;
+    border-radius: 4px;
+    cursor: pointer;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.04);
+    color: var(--text-light);
+    transition: all 0.2s;
+}
+.dashboard-item-actions button.btn-open:hover {
+    background: var(--paper);
+    color: var(--text-dark);
+}
+.dashboard-item-actions button.btn-copy:hover {
+    background: rgba(212, 175, 55, 0.2);
+    color: var(--gold);
+    border-color: var(--gold);
+}
+.dashboard-item-actions button.btn-delete:hover {
+    background: rgba(220, 162, 168, 0.2);
+    color: var(--rose);
+    border-color: var(--rose);
+}
+
+@media (max-width: 768px) {
+    #nav-header {
+        top: 10px;
+        left: 10px;
+        right: 10px;
+    }
+    #nav-header .logo {
+        font-size: 0.95rem;
+    }
+    .nav-links button {
+        padding: 4px 8px;
+        font-size: 0.7rem;
+    }
+    .dashboard-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    .dashboard-item-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+}
+

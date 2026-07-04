@@ -81,6 +81,17 @@
 
     <!-- UI Layer -->
     <div id="ui-layer">
+        
+        <!-- Header Navigation Bar -->
+        <header id="nav-header">
+            <div class="logo">🌹 Our Memory Box</div>
+            <div class="nav-links">
+                <button id="nav-dashboard-btn" style="display:none;">📖 Dashboard</button>
+                <button id="nav-login-btn">Log In</button>
+                <span id="user-greeting" style="display:none;font-size:0.8rem;color:var(--text-muted);"></span>
+                <button id="nav-logout-btn" style="display:none;">Log Out</button>
+            </div>
+        </header>
 
         <!-- Hidden video for MediaPipe -->
         <video id="input-video" class="hidden-video" playsinline></video>
@@ -176,6 +187,52 @@
         <input type="text" id="share-link-input" readonly>
         <button id="copy-link-btn" style="margin-bottom:8px;">📋 Copy Share Link</button>
         <button id="close-share-modal-btn">Close</button>
+    </div>
+
+    <!-- ─── AUTHENTICATION SCREEN (Login / Sign Up) ─── -->
+    <div id="auth-screen" class="glass-panel centered" style="display:none;z-index:150;">
+        <h3 id="auth-title">Log In</h3>
+        <p id="auth-sub" style="color:var(--text-muted);font-size:0.75rem;margin-bottom:1.2rem;">Access your letters and dashboard</p>
+        
+        <form id="auth-form" style="display:flex;flex-direction:column;gap:12px;text-align:left;">
+            <div>
+                <label class="panel-section-label">Username</label>
+                <input type="text" id="auth-username" required placeholder="Enter username..." style="width:100%;padding:10px;border-radius:4px;border:1px solid rgba(255,255,255,0.08);background:rgba(0,0,0,0.2);color:#fff;outline:none;">
+            </div>
+            <div>
+                <label class="panel-section-label">Password</label>
+                <input type="password" id="auth-password" required placeholder="Enter password..." style="width:100%;padding:10px;border-radius:4px;border:1px solid rgba(255,255,255,0.08);background:rgba(0,0,0,0.2);color:#fff;outline:none;">
+            </div>
+            <button type="submit" id="auth-submit-btn" style="margin-top:10px;background:var(--paper);color:var(--text-dark);font-weight:bold;width:100%;">Log In</button>
+        </form>
+        
+        <p style="margin-top:1.2rem;font-size:0.75rem;color:var(--text-muted);">
+            <span id="auth-toggle-text">Don't have an account?</span> 
+            <a href="#" id="auth-toggle-link" style="color:var(--gold);text-decoration:none;font-weight:bold;margin-left:4px;">Sign Up</a>
+        </p>
+        <button id="close-auth-btn" style="margin-top:12px;background:transparent;border:none;color:var(--text-muted);font-size:0.72rem;cursor:pointer;">Cancel</button>
+    </div>
+
+    <!-- ─── CREATOR DASHBOARD MODAL ─── -->
+    <div id="dashboard-modal" class="glass-panel centered" style="display:none;z-index:140;width:92%;max-width:640px;max-height:85vh;overflow-y:auto;text-align:left;">
+        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:10px;margin-bottom:20px;">
+            <h3 style="color:var(--gold);">📖 Your Memory Boxes</h3>
+            <button id="close-dashboard-btn" style="background:transparent;border:none;color:var(--text-muted);font-size:1.5rem;cursor:pointer;line-height:1;padding:0 5px;">&times;</button>
+        </div>
+        
+        <div id="dashboard-empty-state" style="text-align:center;padding:2rem 0;color:var(--text-muted);display:none;">
+            <div style="font-size:3rem;margin-bottom:1rem;">🌹</div>
+            <p>You haven't created any memory boxes yet.</p>
+            <p style="font-size:0.75rem;margin-top:5px;">Click the button below to start creating one!</p>
+        </div>
+        
+        <div id="dashboard-list" style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px;max-height:50vh;overflow-y:auto;">
+            <!-- Dynamically populated rows -->
+        </div>
+        
+        <div style="text-align:center;">
+            <button id="dashboard-create-btn" style="background:var(--paper);color:var(--text-dark);font-weight:bold;">Create New Memory Box</button>
+        </div>
     </div>
 
     <!-- Main App -->

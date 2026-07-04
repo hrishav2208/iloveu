@@ -2,8 +2,9 @@ import os
 import sqlite3
 import random
 import string
-from flask import Flask, request, jsonify, send_from_directory, Response
+from flask import Flask, request, jsonify, send_from_directory, Response, session
 from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
 
 # Optional Supabase import
 try:
@@ -16,12 +17,15 @@ app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024 # 50 MB max
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
+# Set app secret key for session cookies (required for authentication)
+app.secret_key = os.environ.get('SECRET_KEY', 'memorybox_key_default_38120')
+
 # ─── CORS Headers ─────────────────────────────────────────────────────────────
 @app.after_request
 def add_cors_headers(response):
     response.headers['Access-Control-Allow-Origin']  = '*'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
-    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS, DELETE'
     return response
 
 # ─── Supabase Initialization ──────────────────────────────────────────────────
@@ -36,20 +40,35 @@ if create_client and SUPABASE_URL and SUPABASE_KEY:
     except Exception as e:
         print("Failed to initialize Supabase client:", e)
 else:
-    print("Supabase credentials not set or package missing. Falling back to local SQLite & Disk storage.")
+    print("Supabase credentials not set. Using local SQLite & Disk storage.")
 
-# ─── Local Database fallback (safe init) ──────────────────────────────────────
+# ─── Local Database fallback (safe init & migrations) ─────────────────────────
 def init_local_db():
     if not supabase_client:
         conn = sqlite3.connect('database.sqlite')
         c = conn.cursor()
+        # Create users table
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                username TEXT UNIQUE,
+                password_hash TEXT
+            )
+        ''')
+        # Create shares table
         c.execute('''
             CREATE TABLE IF NOT EXISTS shares (
                 id TEXT PRIMARY KEY,
                 images TEXT,
-                target_name TEXT
+                target_name TEXT,
+                user_id TEXT
             )
         ''')
+        # Migration: Add user_id column to shares table if it doesn't exist
+        try:
+            c.execute('ALTER TABLE shares ADD COLUMN user_id TEXT')
+        except sqlite3.OperationalError:
+            pass # column already exists
         conn.commit()
         conn.close()
 
@@ -77,7 +96,190 @@ def favicon_svg():
 def index():
     return send_from_directory('.', 'index.html')
 
-# ─── Upload photos ────────────────────────────────────────────────────────────
+# ─── USER AUTHENTICATION ENDPOINTS ────────────────────────────────────────────
+
+@app.route('/api/auth/signup', methods=['POST'])
+def signup():
+    data = request.json or {}
+    username = data.get('username', '').strip().lower()
+    password = data.get('password', '')
+
+    if not username or not password:
+        return jsonify({'error': 'Username and password are required'}), 400
+
+    password_hash = generate_password_hash(password)
+    user_id = generate_share_id(8)
+
+    if supabase_client:
+        try:
+            # Check if user already exists
+            res = supabase_client.table('users').select('id').eq('username', username).execute()
+            if getattr(res, 'data', []):
+                return jsonify({'error': 'Username already exists'}), 400
+
+            supabase_client.table('users').insert({
+                'id': user_id,
+                'username': username,
+                'password_hash': password_hash
+            }).execute()
+        except Exception as e:
+            print("Supabase signup error:", e)
+            return jsonify({'error': 'Failed to create user'}), 500
+    else:
+        conn = sqlite3.connect('database.sqlite')
+        c = conn.cursor()
+        try:
+            c.execute('INSERT INTO users (id, username, password_hash) VALUES (?, ?, ?)',
+                      (user_id, username, password_hash))
+            conn.commit()
+        except sqlite3.IntegrityError:
+            return jsonify({'error': 'Username already exists'}), 400
+        finally:
+            conn.close()
+
+    session['user_id'] = user_id
+    session['username'] = username
+    return jsonify({'message': 'Registration successful', 'username': username})
+
+@app.route('/api/auth/login', methods=['POST'])
+def login():
+    data = request.json or {}
+    username = data.get('username', '').strip().lower()
+    password = data.get('password', '')
+
+    if not username or not password:
+        return jsonify({'error': 'Username and password are required'}), 400
+
+    user_id = None
+    stored_hash = None
+
+    if supabase_client:
+        try:
+            res = supabase_client.table('users').select('id, password_hash').eq('username', username).execute()
+            rows = getattr(res, 'data', [])
+            if rows:
+                user_id = rows[0]['id']
+                stored_hash = rows[0]['password_hash']
+        except Exception as e:
+            print("Supabase login error:", e)
+            return jsonify({'error': 'Database error'}), 500
+    else:
+        conn = sqlite3.connect('database.sqlite')
+        c = conn.cursor()
+        c.execute('SELECT id, password_hash FROM users WHERE username = ?', (username,))
+        row = c.fetchone()
+        conn.close()
+        if row:
+            user_id = row[0]
+            stored_hash = row[1]
+
+    if not user_id or not check_password_hash(stored_hash, password):
+        return jsonify({'error': 'Invalid username or password'}), 401
+
+    session['user_id'] = user_id
+    session['username'] = username
+    return jsonify({'message': 'Login successful', 'username': username})
+
+@app.route('/api/auth/logout', methods=['POST'])
+def logout():
+    session.pop('user_id', None)
+    session.pop('username', None)
+    return jsonify({'message': 'Logged out successfully'})
+
+@app.route('/api/auth/status', methods=['GET'])
+def auth_status():
+    if 'user_id' in session:
+        return jsonify({
+            'logged_in': True,
+            'username': session.get('username'),
+            'user_id': session.get('user_id')
+        })
+    return jsonify({'logged_in': False})
+
+# ─── CREATOR DASHBOARD ENDPOINTS ──────────────────────────────────────────────
+
+@app.route('/api/dashboard', methods=['GET'])
+def get_dashboard():
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    shares = []
+    if supabase_client:
+        try:
+            res = supabase_client.table('shares').select('id, images, target_name').eq('user_id', user_id).execute()
+            shares = getattr(res, 'data', [])
+        except Exception as e:
+            print("Supabase dashboard error:", e)
+            return jsonify({'error': 'Failed to fetch dashboard'}), 500
+    else:
+        conn = sqlite3.connect('database.sqlite')
+        c = conn.cursor()
+        c.execute('SELECT id, images, target_name FROM shares WHERE user_id = ?', (user_id,))
+        rows = c.fetchall()
+        conn.close()
+
+        for row in rows:
+            shares.append({
+                'id': row[0],
+                'images': row[1],
+                'target_name': row[2]
+            })
+
+    # Add extra details for frontend rendering
+    for share in shares:
+        img_list = share['images'].split(',')
+        share['photo_count'] = len(img_list)
+        share['link'] = f"/?share={share['id']}"
+
+    return jsonify({'shares': shares})
+
+@app.route('/api/share/<share_id>', methods=['DELETE'])
+def delete_share(share_id):
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    is_owner = False
+
+    if supabase_client:
+        try:
+            res = supabase_client.table('shares').select('user_id').eq('id', share_id).execute()
+            rows = getattr(res, 'data', [])
+            if rows and rows[0]['user_id'] == user_id:
+                is_owner = True
+        except Exception as e:
+            print("Supabase ownership check error:", e)
+
+        if is_owner:
+            try:
+                # Delete DB metadata
+                supabase_client.table('shares').delete().eq('id', share_id).execute()
+                # Note: Storage files are left (will expire or sit in bucket) to keep this call fast
+                return jsonify({'message': 'Memory box deleted successfully'})
+            except Exception as e:
+                print("Supabase delete error:", e)
+                return jsonify({'error': 'Failed to delete'}), 500
+    else:
+        # SQLite Ownership check
+        conn = sqlite3.connect('database.sqlite')
+        c = conn.cursor()
+        c.execute('SELECT user_id FROM shares WHERE id = ?', (share_id,))
+        row = c.fetchone()
+        if row and row[0] == user_id:
+            is_owner = True
+
+        if is_owner:
+            c.execute('DELETE FROM shares WHERE id = ?', (share_id,))
+            conn.commit()
+        conn.close()
+
+        if is_owner:
+            return jsonify({'message': 'Memory box deleted successfully'})
+
+    return jsonify({'error': 'Unauthorized to delete this memory box'}), 403
+
+# ─── Photo Upload Endpoint (Associated with Creator) ──────────────────────────
 @app.route('/api/upload', methods=['POST'])
 def upload_files():
     if 'photos' not in request.files:
@@ -86,32 +288,27 @@ def upload_files():
     files = request.files.getlist('photos')
     share_id = generate_share_id()
     target_name = request.form.get('target_name', '')
-    
+    user_id = session.get('user_id') # Link to logged-in user if available
+
     saved_images = []
 
     if supabase_client:
-        # Supabase deployment path
+        # Upload directly to Supabase storage
         for file in files:
             if file.filename == '':
                 continue
             filename = secure_filename(file.filename)
             unique_filename = f"{generate_share_id(4)}_{filename}"
-            
-            # File path in Supabase bucket
             bucket_filepath = f"{share_id}/{unique_filename}"
             file_bytes = file.read()
-            
+
             try:
-                # Upload to 'photos' bucket
                 supabase_client.storage.from_('photos').upload(
                     path=bucket_filepath,
                     file=file_bytes,
                     file_options={"content-type": file.content_type or "image/jpeg"}
                 )
-                
-                # Fetch public URL
                 public_url_obj = supabase_client.storage.from_('photos').get_public_url(bucket_filepath)
-                # handle if public_url_obj is string or object with public_url attr
                 public_url = getattr(public_url_obj, 'public_url', str(public_url_obj))
                 saved_images.append(public_url)
             except Exception as e:
@@ -120,20 +317,20 @@ def upload_files():
         if not saved_images:
             return jsonify({'error': 'Failed to upload any files to Supabase'}), 500
 
-        # Save share link metadata to Supabase DB table
         try:
             images_str = ','.join(saved_images)
             supabase_client.table('shares').insert({
                 'id': share_id,
                 'images': images_str,
-                'target_name': target_name
+                'target_name': target_name,
+                'user_id': user_id
             }).execute()
         except Exception as e:
             print("Failed to save share metadata in Supabase DB:", e)
             return jsonify({'error': 'Failed to save share metadata'}), 500
             
     else:
-        # Local SQLite and Disk fallback
+        # Fallback to local files and SQLite
         for file in files:
             if file.filename == '':
                 continue
@@ -147,11 +344,11 @@ def upload_files():
             return jsonify({'error': 'No valid files uploaded'}), 400
 
         images_str = ','.join(saved_images)
-        
+
         conn = sqlite3.connect('database.sqlite')
         c = conn.cursor()
-        c.execute('INSERT INTO shares (id, images, target_name) VALUES (?, ?, ?)',
-                  (share_id, images_str, target_name))
+        c.execute('INSERT INTO shares (id, images, target_name, user_id) VALUES (?, ?, ?, ?)',
+                  (share_id, images_str, target_name, user_id))
         conn.commit()
         conn.close()
 
@@ -174,7 +371,6 @@ def get_share(share_id):
             print("Failed to select share from Supabase:", e)
             return jsonify({'error': 'Supabase query failed'}), 500
     else:
-        # Local SQLite fallback
         conn = sqlite3.connect('database.sqlite')
         c = conn.cursor()
         c.execute('SELECT images, target_name FROM shares WHERE id = ?', (share_id,))
