@@ -395,6 +395,14 @@ class MemoryBoxTheater {
 
         window.addEventListener('resize', this.onWindowResize.bind(this));
         
+        // Touch controls fallback (mobile compatibility)
+        this.initTouchControls();
+        
+        // Adapt initial camera distance for vertical phone screens
+        if (window.innerWidth < 768) {
+            this.camera.position.set(0, 0, 11);
+        }
+        
         // Start render loop
         this.animate();
         
@@ -698,6 +706,119 @@ class MemoryBoxTheater {
         if (this.fwCanvas) {
             this.fwCanvas.width = window.innerWidth;
             this.fwCanvas.height = window.innerHeight;
+        }
+        
+        // Adjust camera distance for mobile vertical screen sizes
+        if (window.innerWidth < 768) {
+            this.camera.position.z = Math.max(11, this.camera.position.z);
+        }
+    }
+
+    /* ──────────────────────────────────────────
+       MOBILE TOUCH GESTURES FALLBACK
+    ────────────────────────────────────────── */
+    initTouchControls() {
+        this.touchStartPos = new THREE.Vector2();
+        this.touchStartDist = 0;
+        this.isTouchPanning = false;
+        this.isTouchZooming = false;
+        this.hasMovedTouch = false;
+
+        const dom = this.renderer.domElement;
+
+        dom.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                this.isTouchPanning = true;
+                this.isTouchZooming = false;
+                this.hasMovedTouch = false;
+                this.touchStartPos.set(e.touches[0].clientX, e.touches[0].clientY);
+            } else if (e.touches.length === 2) {
+                this.isTouchPanning = false;
+                this.isTouchZooming = true;
+                const dx = e.touches[0].clientX - e.touches[1].clientX;
+                const dy = e.touches[0].clientY - e.touches[1].clientY;
+                this.touchStartDist = Math.sqrt(dx*dx + dy*dy);
+            }
+        }, { passive: true });
+
+        dom.addEventListener('touchmove', (e) => {
+            if (this.isTouchPanning && e.touches.length === 1) {
+                const dx = e.touches[0].clientX - this.touchStartPos.x;
+                const dy = e.touches[0].clientY - this.touchStartPos.y;
+
+                if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+                    this.hasMovedTouch = true;
+                }
+
+                if (!this.focusedMesh) {
+                    // Rotate the globe
+                    this.targetRotationY += dx * 0.0055;
+                    this.targetRotationX += dy * 0.0055;
+                } else {
+                    // Drag focused photo slightly
+                    this.focusedMesh.position.x += dx * 0.005;
+                    this.focusedMesh.position.y -= dy * 0.005;
+                }
+
+                this.touchStartPos.set(e.touches[0].clientX, e.touches[0].clientY);
+            } else if (this.isTouchZooming && e.touches.length === 2) {
+                const dx = e.touches[0].clientX - e.touches[1].clientX;
+                const dy = e.touches[0].clientY - e.touches[1].clientY;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+
+                const deltaDist = dist - this.touchStartDist;
+                this.camera.position.z -= deltaDist * 0.015;
+                this.camera.position.z = Math.max(3, Math.min(18, this.camera.position.z));
+
+                this.touchStartDist = dist;
+            }
+        }, { passive: true });
+
+        dom.addEventListener('touchend', (e) => {
+            if (e.touches.length === 0) {
+                if (this.isTouchPanning && !this.hasMovedTouch) {
+                    // It was a quick, stationary tap (selection/unfocus raycast)
+                    const touch = e.changedTouches[0];
+                    this.handleTap(touch.clientX, touch.clientY);
+                }
+                this.isTouchPanning = false;
+                this.isTouchZooming = false;
+            }
+        });
+    }
+
+    handleTap(clientX, clientY) {
+        const mouse = new THREE.Vector2();
+        mouse.x = (clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(mouse, this.camera);
+
+        const intersects = raycaster.intersectObjects(this.memoryMeshes);
+
+        if (intersects.length > 0) {
+            const clickedMesh = intersects[0].object;
+            
+            if (this.focusedMesh === clickedMesh) {
+                // Double-click/tapping focused card unfocuses it
+                this.focusedMesh = null;
+                this.audio.pluck(293.66, 0.2);
+                showToast('Returned photo to box', 'rose');
+            } else {
+                // Focus the card
+                this.focusedMesh = clickedMesh;
+                this.focusedIndex = this.memoryMeshes.indexOf(clickedMesh);
+                this.audio.pluck(523.25, 0.35);
+                showToast('Selected memory card', 'gold');
+            }
+        } else {
+            // Tapping background empty space releases focus
+            if (this.focusedMesh) {
+                this.focusedMesh = null;
+                this.audio.pluck(293.66, 0.2);
+                showToast('Returned photo to box', 'rose');
+            }
         }
     }
 

@@ -629,3 +629,46 @@ button {
     0%   { transform: scale(0.92); opacity: 0; filter: blur(5px); }
     100% { transform: scale(1); opacity: 1; filter: blur(0px); }
 }
+
+/* ══════════════════════════════════════════
+   MOBILE PHONE RESPONSIVENESS
+══════════════════════════════════════════ */
+@media (max-width: 768px) {
+    #ui-layer {
+        padding: 0.8rem;
+    }
+    .centered {
+        min-width: 90%;
+        max-width: 92%;
+        padding: 2rem 1.2rem;
+    }
+    #love-question {
+        font-size: 1.4rem;
+    }
+    #control-panel {
+        top: 10px; right: 4%; left: 4%;
+        width: 92%;
+        max-height: 75vh;
+        overflow-y: auto;
+    }
+    #caption-panel {
+        width: 92%;
+        left: 4%;
+        right: 4%;
+        top: auto;
+        bottom: 12px;
+        transform: none;
+    }
+    #audio-indicator {
+        top: 1rem; left: 1rem;
+    }
+    #love-text {
+        font-size: 2.2rem;
+        letter-spacing: 4px;
+        line-height: 1.4;
+    }
+    .emoji-btn {
+        font-size: 1.3rem;
+        padding: 4px;
+    }
+}
