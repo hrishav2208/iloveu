@@ -1,0 +1,4 @@
+# refactor: replace callbacks with async/await
+Date: 2026-07-04
+
+Converted promise chains to async/await for cleaner, more readable async code.
