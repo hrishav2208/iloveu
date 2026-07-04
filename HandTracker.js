@@ -15,7 +15,7 @@ export class HandTracker {
         this.heartImg.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23FFD1DC' d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z'/%3E%3C/svg%3E";
 
         this.hands = new window.Hands({
-            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`
         });
 
         this.hands.setOptions({
@@ -31,7 +31,7 @@ export class HandTracker {
         this._faceFrameCount = 0; // throttle face processing
         if (window.FaceMesh) {
             this.faceMesh = new window.FaceMesh({
-                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1647461622/${file}`
             });
             this.faceMesh.setOptions({
                 maxNumFaces: 1,
@@ -42,22 +42,68 @@ export class HandTracker {
             this.faceMesh.onResults(this.onFaceResults.bind(this));
         }
 
-        this.camera = new window.Camera(this.videoElement, {
-            onFrame: async () => {
-                await this.hands.send({ image: this.videoElement });
-                // Only run face mesh every 6th frame to avoid blocking hand detection
-                this._faceFrameCount++;
-                if (this.faceMesh && this._faceFrameCount % 6 === 0) {
-                    await this.faceMesh.send({ image: this.videoElement });
-                }
-            },
-            width: 640,
-            height: 480
-        });
+        this._isActive = false;
+        this.stream = null;
     }
 
     start() {
-        return this.camera.start();
+        if (this._isActive) return Promise.resolve();
+        this._isActive = true;
+
+        const constraints = {
+            video: {
+                width: { ideal: 640 },
+                height: { ideal: 480 },
+                facingMode: 'user'
+            },
+            audio: false
+        };
+
+        return navigator.mediaDevices.getUserMedia(constraints)
+            .then((stream) => {
+                this.videoElement.srcObject = stream;
+                this.videoElement.setAttribute('playsinline', 'true');
+                this.videoElement.setAttribute('muted', 'true');
+                
+                // Play stream (returns a promise, handle play issues on mobile)
+                return this.videoElement.play().then(() => {
+                    this.stream = stream;
+                    this._processFrame();
+                });
+            })
+            .catch((err) => {
+                this._isActive = false;
+                console.error("Custom camera initialization failed:", err);
+                throw err;
+            });
+    }
+
+    _processFrame() {
+        if (!this._isActive) return;
+
+        if (this.videoElement.readyState === this.videoElement.HAVE_ENOUGH_DATA) {
+            this.hands.send({ image: this.videoElement })
+                .catch(err => console.warn("Hands tracking frame send error:", err));
+
+            this._faceFrameCount++;
+            if (this.faceMesh && this._faceFrameCount % 6 === 0) {
+                this.faceMesh.send({ image: this.videoElement })
+                    .catch(err => console.warn("FaceMesh frame send error:", err));
+            }
+        }
+
+        requestAnimationFrame(() => this._processFrame());
+    }
+
+    stop() {
+        this._isActive = false;
+        if (this.stream) {
+            this.stream.getTracks().forEach(track => track.stop());
+            this.stream = null;
+        }
+        if (this.videoElement) {
+            this.videoElement.srcObject = null;
+        }
     }
 
     drawSkeleton(results) {
