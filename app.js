@@ -1797,6 +1797,56 @@ class MemoryBoxTheater {
                     showToast('Failed to load dashboard', 'rose');
                 }
             };
+
+            // ─── CREATE YOUR OWN BOX FROM ANONYMOUS LINK ───
+            const navCreateNewBtn = document.getElementById('nav-create-new-btn');
+            if (navCreateNewBtn) {
+                navCreateNewBtn.addEventListener('click', () => {
+                    // Clear search params in URL without reload
+                    window.history.pushState(null, '', window.location.pathname);
+                    
+                    // Reset gallery to default placeholders
+                    this.hasUserPhotos = false;
+                    this.memoryMeshes.forEach(mesh => {
+                        this.carouselGroup.remove(mesh);
+                        mesh.geometry.dispose();
+                        if (mesh.material.map) mesh.material.map.dispose();
+                        mesh.material.dispose();
+                    });
+                    this.memoryMeshes = [];
+                    this.focusedMesh = this.hoveredMesh = null;
+                    
+                    // Load standard placeholder photos
+                    for (let i = 0; i < 20; i++) {
+                        const url = `https://picsum.photos/seed/${i + 70}/400/600`;
+                        this.addPhotoToGlobe(url, i, `Warm memory ${i + 1}`);
+                    }
+                    this.recalculateGlobe();
+                    this._updatePhotoCounter();
+                    
+                    // Reset caption notepad panel
+                    const panel = document.getElementById('caption-panel');
+                    if (panel) panel.style.display = 'none';
+                    
+                    // Hide share inputs
+                    const shareBtn = document.getElementById('share-gallery-btn');
+                    const targetNameInp = document.getElementById('target-name-input');
+                    if (shareBtn) shareBtn.style.display = 'none';
+                    if (targetNameInp) targetNameInp.style.display = 'none';
+
+                    // Reset greeting/landing text
+                    const q = document.getElementById('love-question');
+                    if (q) q.innerText = 'Would you like to open our memory box?';
+                    
+                    // If they are on the landing page, click Step Inside automatically
+                    const loadingScreen = document.getElementById('loading-screen');
+                    if (loadingScreen && loadingScreen.style.display !== 'none') {
+                        if (btnYes) btnYes.click();
+                    }
+                    
+                    showToast('Started a new memory box! 🕯️', 'gold');
+                });
+            }
         };
 
         btnYes.addEventListener('click', handleYes);
