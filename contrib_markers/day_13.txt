@@ -1,4 +1,0 @@
-# feat: add swipe left and right gesture support
-Date: 2026-07-05
-
-Implemented velocity-based swipe detection for left and right hand movements.
