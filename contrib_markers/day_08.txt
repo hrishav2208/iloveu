@@ -1,4 +1,0 @@
-# chore: add npm scripts for dev and build
-Date: 2026-06-30
-
-Added dev, build, and lint scripts to package.json for easier workflow.
