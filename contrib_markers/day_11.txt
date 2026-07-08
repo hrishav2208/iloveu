@@ -1,4 +1,0 @@
-# fix: correct landmark index for thumb tip
-Date: 2026-07-03
-
-Fixed off-by-one error in thumb landmark index causing wrong gesture detection.
