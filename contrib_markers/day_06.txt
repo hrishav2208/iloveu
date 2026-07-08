@@ -1,4 +1,0 @@
-# feat: implement pinch-to-zoom gesture
-Date: 2026-06-28
-
-Pinch gesture now triggers zoom in/out actions using finger distance ratio.
