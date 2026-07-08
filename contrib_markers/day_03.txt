@@ -1,4 +1,0 @@
-# style: add dark mode support to UI
-Date: 2026-06-25
-
-Implemented CSS dark mode using prefers-color-scheme media query.
