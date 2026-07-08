@@ -1,4 +1,0 @@
-# fix: handle webcam permission denial gracefully
-Date: 2026-06-24
-
-Added user-friendly error message when webcam access is denied by the browser.
