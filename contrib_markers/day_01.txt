@@ -1,4 +1,0 @@
-# feat: add gesture smoothing algorithm
-Date: 2026-06-23
-
-Gesture smoothing: applied exponential moving average for smoother hand tracking output.
