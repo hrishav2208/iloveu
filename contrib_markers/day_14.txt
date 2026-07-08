@@ -1,4 +1,0 @@
-# chore: final review and code polish
-Date: 2026-07-06
-
-Final pass: removed console.logs, added JSDoc comments, formatted all files.
